@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-dbg/cmake_install.cmake",
+		"C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-dbg/src/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

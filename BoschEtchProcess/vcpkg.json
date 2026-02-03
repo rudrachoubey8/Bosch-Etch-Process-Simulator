@@ -1,0 +1,7 @@
+{
+    "name": "bosch-etch-sim",
+    "version": "0.1.0",
+    "dependencies": [
+        "glfw3"
+    ]
+}

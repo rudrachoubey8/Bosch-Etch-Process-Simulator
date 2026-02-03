@@ -1,0 +1,26 @@
+# ninja log v6
+57	456	7901957320013849	src/CMakeFiles/glfw.dir/platform.c.obj	bf15ff49ad1380be
+91	533	7901957320338733	src/CMakeFiles/glfw.dir/osmesa_context.c.obj	bd47b52538b7159
+101	548	7901957320441101	src/CMakeFiles/glfw.dir/null_init.c.obj	5345f0c7222ea61b
+14	563	7901957319546919	src/CMakeFiles/glfw.dir/context.c.obj	df2d21e7c86d7530
+22	578	7901957319651362	src/CMakeFiles/glfw.dir/init.c.obj	9fd43b713f8946
+42	591	7901957319848830	src/CMakeFiles/glfw.dir/monitor.c.obj	e55f1a3217bd83ed
+67	604	7901957320109840	src/CMakeFiles/glfw.dir/vulkan.c.obj	7cd451e1c2a2ad38
+127	618	7901957320651736	src/CMakeFiles/glfw.dir/null_joystick.c.obj	eab0dcb021139c10
+119	631	7901957320621213	src/CMakeFiles/glfw.dir/null_window.c.obj	b515b6be961ad62a
+76	643	7901957320187542	src/CMakeFiles/glfw.dir/window.c.obj	775847828094ea7b
+84	650	7901957320272937	src/CMakeFiles/glfw.dir/egl_context.c.obj	38777853676047ff
+32	656	7901957319750995	src/CMakeFiles/glfw.dir/input.c.obj	6872b38b3a30ad65
+108	913	7901957320507387	src/CMakeFiles/glfw.dir/null_monitor.c.obj	2b8c80ef004536bd
+533	977	7901957324771585	src/CMakeFiles/glfw.dir/win32_time.c.obj	685f8ad1a463f983
+632	978	7901957325751002	src/CMakeFiles/glfw.dir/glfw.rc.res	3a607fefb65c26d1
+549	1038	7901957324881994	src/CMakeFiles/glfw.dir/win32_thread.c.obj	62901617ee0a6d9
+461	1067	7901957324047024	src/CMakeFiles/glfw.dir/win32_module.c.obj	eda7dcc7fc8a1b82
+564	1087	7901957325061993	src/CMakeFiles/glfw.dir/win32_init.c.obj	da7d98714d971f6c
+592	1110	7901957325348382	src/CMakeFiles/glfw.dir/win32_monitor.c.obj	e8b0090f9a5ef14f
+579	1116	7901957325204317	src/CMakeFiles/glfw.dir/win32_joystick.c.obj	6f058fbd9ab42296
+618	1155	7901957325613099	src/CMakeFiles/glfw.dir/wgl_context.c.obj	892064d948b6c28e
+605	1216	7901957325475970	src/CMakeFiles/glfw.dir/win32_window.c.obj	9dcbae181ff46955
+1216	1379	7901957332984808	src/glfw3.dll	e3bd6ae923e21007
+1216	1379	7901957332984808	src/glfw3dll.lib	e3bd6ae923e21007
+1380	1642	7901957333238606	CMakeFiles/install.util	750c3728753efa98

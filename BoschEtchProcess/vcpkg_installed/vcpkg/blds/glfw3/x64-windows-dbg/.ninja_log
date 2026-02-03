@@ -1,0 +1,26 @@
+# ninja log v6
+87	519	7901957303061040	src/CMakeFiles/glfw.dir/osmesa_context.c.obj	97787d278d5521ce
+61	534	7901957302808470	src/CMakeFiles/glfw.dir/vulkan.c.obj	bc70fd533e57d780
+15	549	7901957302369860	src/CMakeFiles/glfw.dir/context.c.obj	14795bdcb20bd6d8
+25	562	7901957302471710	src/CMakeFiles/glfw.dir/init.c.obj	4dd2130fbb964782
+79	573	7901957302969929	src/CMakeFiles/glfw.dir/egl_context.c.obj	ab33031fa313bc74
+43	584	7901957302647961	src/CMakeFiles/glfw.dir/monitor.c.obj	81ee627f9bfb6982
+53	597	7901957302747924	src/CMakeFiles/glfw.dir/platform.c.obj	1d4889ddea1d93d1
+106	612	7901957303263496	src/CMakeFiles/glfw.dir/null_monitor.c.obj	f96c9c92efda9f5e
+97	625	7901957303174134	src/CMakeFiles/glfw.dir/null_init.c.obj	e29e3094c339eeb1
+69	638	7901957302861003	src/CMakeFiles/glfw.dir/window.c.obj	15740a3978db2023
+34	645	7901957302551089	src/CMakeFiles/glfw.dir/input.c.obj	91cd7392ef04edca
+126	970	7901957303475133	src/CMakeFiles/glfw.dir/null_joystick.c.obj	74a0aebda0201eca
+549	1023	7901957307675857	src/CMakeFiles/glfw.dir/win32_thread.c.obj	ecf02cb0d569c544
+562	1029	7901957307839239	src/CMakeFiles/glfw.dir/win32_init.c.obj	c00bcaa5c22c9683
+522	1036	7901957307439517	src/CMakeFiles/glfw.dir/win32_module.c.obj	e9b65444a36ef5ae
+534	1044	7901957307562283	src/CMakeFiles/glfw.dir/win32_time.c.obj	1a1ab899a0dec15d
+115	1051	7901957303374253	src/CMakeFiles/glfw.dir/null_window.c.obj	4e598499d3a00eca
+613	1058	7901957308350201	src/CMakeFiles/glfw.dir/wgl_context.c.obj	d842adb583c7e0d3
+584	1064	7901957308050622	src/CMakeFiles/glfw.dir/win32_monitor.c.obj	40a1c7d94dd6013a
+573	1070	7901957307950052	src/CMakeFiles/glfw.dir/win32_joystick.c.obj	62fdda4e55d61bc4
+598	1075	7901957308160470	src/CMakeFiles/glfw.dir/win32_window.c.obj	8f7d168f9b855321
+625	1086	7901957308461317	src/CMakeFiles/glfw.dir/glfw.rc.res	395ea0d425a4d184
+1087	1426	7901957316201352	src/glfw3.dll	fa134911f8284696
+1087	1426	7901957316201352	src/glfw3dll.lib	fa134911f8284696
+1426	1679	7901957316479477	CMakeFiles/install.util	c9a6c072ef4b1249
