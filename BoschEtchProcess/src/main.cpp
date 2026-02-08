@@ -157,6 +157,9 @@ void renderMesh(Simulation& simulation) {
         if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
             spawnParticles(simulation, 10000, 1, 1);
         }
+        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
+            spawnParticles(simulation, 10000, 0, 0);
+        }
         float c = cos(theta);
         float s = sin(theta);
 
