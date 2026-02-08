@@ -1,12 +1,13 @@
 #pragma once
 #include <vector>
+#include <cstdint>
 
 struct Voxel {
-    bool solid = 0;
-    int type = 0;
-    int threshold = 0;
-    int depositThreshold = 0;
-    int voxelSize = 0;
+    int32_t solid;
+    int32_t type;
+    float threshold;
+    float depositThreshold;
+    float voxelSize;
 };
 
 struct Particle {
@@ -21,15 +22,16 @@ struct Particle {
 
 
 struct Vertex {
-    float x, y, z;
-    float nx, ny, nz;
-    float r, g, b;
+    float x, y, z, _pad0;
+    float nx, ny, nz, _pad1;
+    float r, g, b, _pad2;
 };
 
 // XYZ = width, length, depth
 class Grid {
 public:
     int X, Y, Z;
+    std::vector<Voxel> voxels;
 
     Grid(int X, int Y, int Z);
 
@@ -38,7 +40,6 @@ public:
 
 
 private:
-    std::vector<Voxel> voxels;
 
     int index(int x, int y, int z);
 };

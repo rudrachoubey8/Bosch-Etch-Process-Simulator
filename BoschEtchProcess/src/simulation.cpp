@@ -99,7 +99,7 @@ void Simulation::marchRay(Particle& p, float maxDist)
             p.energy -= damage;
 
             if (v.threshold <= 0.0f) {
-                v.solid = false;
+                v.solid = 0;
                 v.type = 0;
             }
 
@@ -117,7 +117,7 @@ void Simulation::marchRay(Particle& p, float maxDist)
 
                     if (!newV.solid)
                     {
-                        newV.solid = true;
+                        newV.solid = 1;
                         newV.type = 2;
                         newV.threshold = 1000;
                         newV.depositThreshold = 150000;

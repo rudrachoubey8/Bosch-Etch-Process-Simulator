@@ -1,202 +1,166 @@
-#include <Mesh.h>
+#include "Mesh.h"
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+// ---------- helper ----------
+static GLuint loadComputeProgram(const char* path) {
+    std::ifstream file(path);
+    std::stringstream ss;
+    ss << file.rdbuf();
+    std::string src = ss.str();
+    const char* csrc = src.c_str();
+
+    GLuint cs = glCreateShader(GL_COMPUTE_SHADER);
+    glShaderSource(cs, 1, &csrc, nullptr);
+    glCompileShader(cs);
+
+    GLint ok;
+    glGetShaderiv(cs, GL_COMPILE_STATUS, &ok);
+    if (!ok) {
+        char log[1024];
+        glGetShaderInfoLog(cs, 1024, nullptr, log);
+        std::cerr << "COMPUTE SHADER ERROR:\n" << log << std::endl;
+        std::abort();
+
+    }
+
+    GLuint prog = glCreateProgram();
+    glAttachShader(prog, cs);
+    glLinkProgram(prog);
+
+    glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+    if (!ok) {
+        char log[1024];
+        glGetProgramInfoLog(prog, 1024, nullptr, log);
+        throw std::runtime_error(log);
+    }
+
+    glDeleteShader(cs);
+    return prog;
+}
+
+// ---------- Mesh ----------
 Mesh::Mesh(Grid& g) : grid(g) {}
 
-bool Mesh::solid(int x, int y, int z) {
-    if (!grid.inBounds(x, y, z)) return false;
-    return grid.at(x, y, z).solid;
+Mesh::~Mesh() {
+    glDeleteBuffers(1, &voxelSSBO);
+    glDeleteBuffers(1, &vertexSSBO);
+    glDeleteBuffers(1, &counterSSBO);
+    glDeleteVertexArrays(1, &vao);
+    glDeleteProgram(computeProgram);
 }
 
-void Mesh::buildMask(
-    const Dir& d,
-    int slice,
-    std::vector<std::vector<int>>& mask
-) {
-    int A = mask.size();
-    int B = mask[0].size();
-
-    for (int a = 0; a < A; a++) {
-        for (int b = 0; b < B; b++) {
-
-            int x, y, z;
-            int nx, ny, nz;
-
-            if (d.axis == X_AXIS) {
-                x = slice; y = a; z = b;
-                nx = slice + d.sign; ny = a; nz = b;
-            }
-            else if (d.axis == Y_AXIS) {
-                x = a; y = slice; z = b;
-                nx = a; ny = slice + d.sign; nz = b;
-            }
-            else {
-                x = a; y = b; z = slice;
-                nx = a; ny = b; nz = slice + d.sign;
-            }
-
-            bool curr = solid(x, y, z);
-            bool next = solid(nx, ny, nz);
-
-            mask[a][b] = curr && !next ? grid.at(x,y,z).type : 0;
-        }
-    }
+void Mesh::setRenderingProgram(GLuint shaderProgram) {
+    renderProgram = shaderProgram;
 }
 
+void Mesh::initGPU() {
+    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 36;
 
-void Mesh::emitQuad(
-    const Dir& d,
-    int slice,
-    int a, int b,
-    int w, int h,int type
-) {
-    float nx = 0, ny = 0, nz = 0;
+    // voxel SSBO
+    glGenBuffers(1, &voxelSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        grid.X * grid.Y * grid.Z * sizeof(Voxel),
+        nullptr,
+        GL_STATIC_DRAW
+    );
 
-    if (d.axis == X_AXIS) nx = d.sign;
-    if (d.axis == Y_AXIS) ny = d.sign;
-    if (d.axis == Z_AXIS) nz = d.sign;
+    // vertex SSBO
+    glGenBuffers(1, &vertexSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, vertexSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        MAX_VERTS * sizeof(Vertex),
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
 
+    // atomic counter
+    glGenBuffers(1, &counterSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+    uint32_t zero = 0;
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(uint32_t),
+        &zero,
+        GL_DYNAMIC_DRAW
+    );
 
-    auto V = [&](int da, int db) -> Vertex {
-        int x, y, z;
-        if (d.axis == X_AXIS) {
-            x = slice + (d.sign > 0);
-            y = a + da;
-            z = b + db;
-        }
-        else if (d.axis == Y_AXIS) {
-            x = a + da;
-            y = slice + (d.sign > 0);
-            z = b + db;
-        }
-        else {
-            x = a + da;
-            y = b + db;
-            z = slice + (d.sign > 0);
-        }
-        
-        float red=0.0f, green=0, blue=0;
-        
-        if (type == 1) {
-            red = 1.0f;
-            green = 0.0f;
-            blue = 0.0f;
-        }
-        else if (type == 2) {
-            red = 1.0f;
-            green = 1.0f;
-            blue = 1.0f;
-        }
+    // bind points
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, voxelSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
 
-        return {
-            (float)x,(float)y,(float)z,
-            nx,ny,nz,
-            red,green,blue
-        };
+    // VAO
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexSSBO);
 
-    };
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+    glEnableVertexAttribArray(0);
 
-    Vertex v0 = V(0, 0);
-    Vertex v1 = V(h, 0);
-    Vertex v2 = V(h, w);
-    Vertex v3 = V(0, w);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+        sizeof(Vertex), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
-    if (d.sign > 0) {
-        vertices.push_back(v0);
-        vertices.push_back(v1);
-        vertices.push_back(v2);
-        vertices.push_back(v0);
-        vertices.push_back(v2);
-        vertices.push_back(v3);
-    }
-    else {
-        vertices.push_back(v0);
-        vertices.push_back(v2);
-        vertices.push_back(v1);
-        vertices.push_back(v0);
-        vertices.push_back(v3);
-        vertices.push_back(v2);
-    }
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE,
+        sizeof(Vertex), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    // shaders
+    std::string path = std::string(PROJECT_ROOT) + "/shaders/mesh.comp.shader";
+    computeProgram = loadComputeProgram(path.c_str());
+
 }
-void Mesh::greedyMerge(
-    const Dir& d,
-    int slice,
-    std::vector<std::vector<int>>& mask
-) {
-    int A = mask.size();
-    int B = mask[0].size();
 
-    for (int a = 0; a < A; a++) {
-        for (int b = 0; b < B; b++) {
-
-            if (!mask[a][b]) continue;
-
-            int currType = mask[a][b];
-
-            int w = 1;
-
-            while (b + w < B && mask[a][b + w] == currType) w++;
-
-            int h = 1;
-            while (a + h < A) {
-                bool ok = true;
-                for (int k = 0; k < w; k++) {
-                    if (!(mask[a + h][b + k] == currType)) {
-                        ok = false;
-                        break;
-                    }
-                }
-                if (!ok) break;
-                h++;
-            }
-
-            for (int da = 0; da < h; da++)
-                for (int db = 0; db < w; db++)
-                    mask[a + da][b + db] = 0;
-
-            emitQuad(d, slice, a, b, w, h, currType);
-            b += w - 1;
-        }
-    }
+void Mesh::uploadVoxels() {
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+    glBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        grid.X * grid.Y * grid.Z * sizeof(Voxel),
+        grid.voxels.data()
+    );
 }
+
 void Mesh::buildMesh() {
+    vertCount = 0;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+    uint32_t zero = 0;
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
 
-    vertices.clear();
+    glUseProgram(computeProgram);
+    glUniform3i(
+        glGetUniformLocation(computeProgram, "gridSize"),
+        grid.X, grid.Y, grid.Z
+    );
 
-    Dir dirs[6] = {
-        {X_AXIS,-1},{X_AXIS,+1},
-        {Y_AXIS,-1},{Y_AXIS,+1},
-        {Z_AXIS,-1},{Z_AXIS,+1}
-    };
+    glDispatchCompute(
+        (grid.X + 7) / 8,
+        (grid.Y + 7) / 8,
+        (grid.Z + 7) / 8
+    );
 
-    for (Dir d : dirs) {
 
-        int slices, A, B;
+    glMemoryBarrier(
+        GL_SHADER_STORAGE_BARRIER_BIT |
+        GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+    );
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(uint32_t),
+        &vertCount
+    );
 
-        if (d.axis == X_AXIS) {
-            slices = grid.X;
-            A = grid.Y;
-            B = grid.Z;
-        }
-        else if (d.axis == Y_AXIS) {
-            slices = grid.Y;
-            A = grid.X;
-            B = grid.Z;
-        }
-        else {
-            slices = grid.Z;
-            A = grid.X;
-            B = grid.Y;
-        }
-
-        std::vector<std::vector<int>> mask(
-            A, std::vector<int>(B)
-        );
-
-        for (int s = 0; s < slices; s++) {
-            buildMask(d, s, mask);
-            greedyMerge(d, s, mask);
-        }
-    }
 }
 
-
-
+void Mesh::draw() {
+    glUseProgram(renderProgram);
+    glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLES, 0, vertCount);
+}

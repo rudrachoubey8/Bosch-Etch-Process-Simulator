@@ -1,35 +1,33 @@
 #pragma once
 #include <vector>
+#include "glad/glad.h"
+#include <GLFW/glfw3.h>
+
 #include "structures.h"
+#include <shader.h>
 
 using namespace std;
-
-
 class Mesh {
 public:
     Mesh(Grid& g);
+    ~Mesh();
 
-    void buildMesh();
-    std::vector<Vertex> vertices;
+    void initGPU();     // create buffers, shaders, VAO
+    void uploadVoxels();// upload voxel data
+    void buildMesh();   // dispatch compute
+    void draw();        // render
+    void setRenderingProgram(GLuint program);
+    uint32_t vertCount = 0;
 
 private:
     Grid& grid;
 
-    enum Axis { X_AXIS, Y_AXIS, Z_AXIS };
+    GLuint voxelSSBO = 0;
+    GLuint vertexSSBO = 0;
+    GLuint counterSSBO = 0;
+    GLuint vao = 0;
 
-    struct Dir {
-        Axis axis;
-        int sign; // +1 or -1
-    };
+    GLuint computeProgram = 0;
+    GLuint renderProgram = 0;
 
-    void buildMask(const Dir& d, int slice,
-        std::vector<std::vector<int>>& mask);
-
-    void greedyMerge(const Dir& d, int slice,
-        std::vector<std::vector<int>>& mask);
-
-    void emitQuad(const Dir& d, int slice,
-        int a, int b, int w, int h, int type);
-
-    bool solid(int x, int y, int z);
 };
