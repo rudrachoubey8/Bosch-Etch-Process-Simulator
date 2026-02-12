@@ -3,203 +3,305 @@
 #include <cmath>
 #include <random>
 #include <iostream>
-namespace Math {
-    float randomFloat(float max)
-    {
-        static std::mt19937 gen{ std::random_device{}() };
-        std::uniform_real_distribution<float> dist(0.0f, max);
-        return dist(gen);
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <chrono>
+
+static GLuint loadComputeProgram(const char* path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open compute shader");
     }
-}
-Simulation::Simulation(int X_, int Y_, int Z_, float voxelSize_) : grid(X_, Y_, Z_) {
-	X = X_;
-	Y = Y_;
-	Z = Z_;
-    voxelSize = voxelSize_;
-    particles.reserve(10000);
+
+    std::stringstream ss;
+    ss << file.rdbuf();
+    std::string src = ss.str();
+    const char* csrc = src.c_str();
+
+    GLuint cs = glCreateShader(GL_COMPUTE_SHADER);
+    glShaderSource(cs, 1, &csrc, nullptr);
+    glCompileShader(cs);
+
+    GLint ok;
+    glGetShaderiv(cs, GL_COMPILE_STATUS, &ok);
+    if (!ok) {
+        char log[1024];
+        glGetShaderInfoLog(cs, 1024, nullptr, log);
+        std::cerr << "COMPUTE SHADER ERROR:\n" << log << std::endl;
+        std::abort();
+    }
+
+    GLuint prog = glCreateProgram();
+    glAttachShader(prog, cs);
+    glLinkProgram(prog);
+
+    glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+    if (!ok) {
+        char log[1024];
+        glGetProgramInfoLog(prog, 1024, nullptr, log);
+        throw std::runtime_error(log);
+    }
+
+    glDeleteShader(cs);
+    return prog;
 }
 
+
+Simulation::Simulation(int X_, int Y_, int Z_, float voxelSize_)
+    : grid(X_, Y_, Z_) {
+
+    X = X_;
+    Y = Y_;
+    Z = Z_;
+    voxelSize = voxelSize_;
+
+}
+
+
 void Simulation::initRectangle(const Voxel& voxel, int x0, int y0, int z0, int x1, int y1, int z1) {
-	for (int x = x0; x < x1; x++)
-	{
-		for (int y = y0; y < y1; y++)
-		{
-			for (int z = z0;z < z1;z++) {
-				grid.at(x, y, z) = voxel;
-			}
-		}
-	}
+    for (int x = x0; x < x1; x++)
+    {
+        for (int y = y0; y < y1; y++)
+        {
+            for (int z = z0;z < z1;z++) {
+                grid.at(x, y, z) = voxel;
+            }
+        }
+    }
 }
 
 void Simulation::initParticle(const Particle& particle) {
-	particles.push_back(particle);
-} 
+    particles.push_back(particle);
+}
 
-void Simulation::tick(float dt)
-{
-    for (Particle& p : particles)
-    {
-        if (!p.alive) continue;
-        marchRay(p, p.speed * dt);
+void Simulation::tick(float dt) {
+    int SUBSTEPS = 1;
+    float subDt = dt / SUBSTEPS;
+    bindBuffers();
+
+    for (int i = 0; i < SUBSTEPS; ++i) {
+        uploadParticles(particles);
+        uploadVoxels(grid.voxels);
+
+        dispatchRayMarch(rayMarchProgram, particles.size());
+
+        auto hits = downloadHits();
+        resolveHitEvents(hits);
     }
 
-    particles.erase(
-        std::remove_if(particles.begin(), particles.end(),
-            [](const Particle& p) { return !p.alive; }),
-        particles.end()
+    particles = downloadParticles();
+    
+}
+
+void Simulation::dispatchRayMarch(GLuint program, int particleCount)
+{
+    glUseProgram(program);
+
+    glUniform1f(glGetUniformLocation(program, "voxelSize"), voxelSize);
+    glUniform1i(glGetUniformLocation(program, "maxSteps"), MAX_STEPS);
+    glUniform3i(glGetUniformLocation(program, "gridSize"), grid.X, grid.Y, grid.Z);
+    glUniform1i(glGetUniformLocation(program, "particleCount"), particleCount);
+
+    // Reset hit counter
+    {
+        uint32_t zero = 0;
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
+    }
+
+    // Reset final particle counter
+    {
+        uint32_t zero = 0;
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticlesCount);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
+    }
+
+    int groups = (particleCount + 255) / 256;
+    
+    glDispatchCompute(groups, 1, 1);
+
+    glMemoryBarrier(GL_ALL_BARRIER_BITS);
+}
+
+
+std::vector<HitEvent> Simulation::downloadHits() {
+    uint32_t hitCount = 0;
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(uint32_t),
+        &hitCount
+    );
+
+    hitCount = std::min(hitCount, MAX_HITS);
+
+    std::vector<HitEvent> hits(hitCount);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, hitSSBO);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        hitCount * sizeof(HitEvent),
+        hits.data()
+    );
+
+    return hits;
+}
+
+std::vector<Particle> Simulation::downloadParticles()
+{
+    uint32_t count = 0;
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticlesCount);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(uint32_t),
+        &count
+    );
+
+    count = std::min(count, (uint32_t)MAX_PARTICLES);
+
+    std::vector<Particle> gpuParticles(count);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticles);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        count * sizeof(Particle),
+        gpuParticles.data()
+    );
+
+    return gpuParticles;
+}
+
+
+
+
+void Simulation::createBuffers() {
+
+    std::string path = std::string(PROJECT_ROOT) + "/shaders/march.comp.shader";
+    rayMarchProgram = loadComputeProgram(path.c_str());
+
+    glGenBuffers(1, &particleSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(Particle) * MAX_PARTICLES,
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
+
+    glGenBuffers(1, &voxelSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(Voxel) * grid.X * grid.Y * grid.Z,
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
+
+    glGenBuffers(1, &hitSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, hitSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(HitEvent) * MAX_HITS,
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
+
+    
+
+    glGenBuffers(1, &finalParticles);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticles);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(Particle) * MAX_PARTICLES,
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
+
+    uint32_t zero = 0;
+    glGenBuffers(1, &counterSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(uint32_t),
+        &zero,
+        GL_DYNAMIC_DRAW
+    );
+
+    uint32_t z2 = 0;
+    glGenBuffers(1, &finalParticlesCount);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticlesCount);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(uint32_t),
+        &z2,
+        GL_DYNAMIC_DRAW
+   );
+}
+
+void Simulation::bindBuffers(){
+    
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, particleSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, hitSSBO);
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, counterSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, finalParticlesCount);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, finalParticles);
+
+}
+
+void Simulation::uploadParticles(std::vector<Particle>& particles) {
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleSSBO);
+    glBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        particles.size() * sizeof(Particle),
+        particles.data()
     );
 }
-void Simulation::marchRay(Particle& p, float maxDist)
-{
-    int cx = int(std::floor(p.x / voxelSize));
-    int cy = int(std::floor(p.y / voxelSize));
-    int cz = int(std::floor(p.z / voxelSize));
 
-    int lastCX = cx;
-    int lastCY = cy;
-    int lastCZ = cz;
+void Simulation::uploadVoxels(std::vector<Voxel>& voxels) {
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+    glBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        grid.voxels.size() * sizeof(Voxel),
+        grid.voxels.data()
+    );
+}
 
-    int stepX = (p.dx >= 0) ? 1 : -1;
-    int stepY = (p.dy >= 0) ? 1 : -1;
-    int stepZ = (p.dz >= 0) ? 1 : -1;
 
-    float nextX = ((cx + (stepX > 0)) * voxelSize - p.x) / p.dx;
-    float nextY = ((cy + (stepY > 0)) * voxelSize - p.y) / p.dy;
-    float nextZ = ((cz + (stepZ > 0)) * voxelSize - p.z) / p.dz;
 
-    float deltaX = voxelSize / std::abs(p.dx);
-    float deltaY = voxelSize / std::abs(p.dy);
-    float deltaZ = voxelSize / std::abs(p.dz);
+void Simulation::resolveHitEvents(std::vector<HitEvent>& hits) {
+    for (auto& h : hits) {
+        //std::cout << h.damage;
+        if (!grid.inBounds(h.cx, h.cy, h.cz)) continue;
 
-    float traveled = 0.0f;
+        Voxel& v = grid.at(h.cx, h.cy, h.cz);
 
-    constexpr float roughness = Settings::Roughness;
-    constexpr float minEnergy = 1e-6f;
+        if (!v.solid) continue;
 
-    while (traveled < maxDist && p.alive)
-    {
-        if (!grid.inBounds(cx, cy, cz)) {
-            p.alive = false;
-            break;
+        v.threshold -= h.damage;
+
+        if (v.threshold <= 0.0f) {
+            v.solid = 0;
+            v.type = 0;
         }
 
-        Voxel& v = grid.at(cx, cy, cz);
-
-        if (v.solid)
-        {
-            // ===== damage & deposition =====
-
-            float damage = std::max(p.energy * 0.3f, 0.01f);
-
-            if (!p.deposit)
-                v.threshold -= damage;
-            else
-                v.depositThreshold -= damage;
-
-            p.energy -= damage;
-
-            if (v.threshold <= 0.0f) {
-                v.solid = 0;
-                v.type = 0;
+        if (h.flags & 1) {
+            v.depositThreshold -= h.damage;
+            if (v.depositThreshold <= 0.0f) {
+                //spawnDeposit(h.cx, h.cy, h.cz);
+                v.depositThreshold = 10.0f;
             }
-
-            // ===== deposition growth (unchanged) =====
-
-            if (v.depositThreshold <= 0.0f)
-            {
-                int nx = cx + (cx - lastCX);
-                int ny = cy + (cy - lastCY);
-                int nz = cz + (cz - lastCZ);
-
-                if (grid.inBounds(nx, ny, nz))
-                {
-                    Voxel& newV = grid.at(nx, ny, nz);
-
-                    if (!newV.solid)
-                    {
-                        newV.solid = 1;
-                        newV.type = 2;
-                        newV.threshold = 1000;
-                        newV.depositThreshold = 150000;
-                    }
-                }
-
-                v.depositThreshold = 5.0f + Math::randomFloat(15.0f);
-            }
-
-            // ===== reflect OR die =====
-
-            float reflectProb = 0.6f;   // tune this
-
-            if (Math::randomFloat(1) < reflectProb)
-            {
-                // reflect on entered face
-                if (cx != lastCX) p.dx *= -1.0f;
-                if (cy != lastCY) p.dy *= -1.0f;
-                if (cz != lastCZ) p.dz *= -1.0f;
-
-                // roughness
-                p.dx += (Math::randomFloat(1) * 2 - 1) * roughness;
-                p.dy += (Math::randomFloat(1) * 2 - 1) * roughness;
-                p.dz += (Math::randomFloat(1) * 2 - 1) * roughness;
-
-                float len = std::sqrt(p.dx * p.dx + p.dy * p.dy + p.dz * p.dz);
-                p.dx /= len;
-                p.dy /= len;
-                p.dz /= len;
-
-                stepX = (p.dx >= 0) ? 1 : -1;
-                stepY = (p.dy >= 0) ? 1 : -1;
-                stepZ = (p.dz >= 0) ? 1 : -1;
-
-                deltaX = voxelSize / std::abs(p.dx);
-                deltaY = voxelSize / std::abs(p.dy);
-                deltaZ = voxelSize / std::abs(p.dz);
-
-                nextX = ((cx + (stepX > 0)) * voxelSize - p.x) / p.dx;
-                nextY = ((cy + (stepY > 0)) * voxelSize - p.y) / p.dy;
-                nextZ = ((cz + (stepZ > 0)) * voxelSize - p.z) / p.dz;
-            }
-            else
-            {
-                // particle absorbed
-                p.alive = false;
-                break;
-            }
-
-            if (p.energy < minEnergy) {
-                p.alive = false;
-                break;
-            }
-        }
-
-        // ===== advance ray =====
-
-        lastCX = cx;
-        lastCY = cy;
-        lastCZ = cz;
-
-        if (nextX < nextY && nextX < nextZ)
-        {
-            cx += stepX;
-            traveled = nextX;
-            nextX += deltaX;
-        }
-        else if (nextY < nextZ)
-        {
-            cy += stepY;
-            traveled = nextY;
-            nextY += deltaY;
-        }
-        else
-        {
-            cz += stepZ;
-            traveled = nextZ;
-            nextZ += deltaZ;
         }
     }
-
-    p.x += p.dx * traveled;
-    p.y += p.dy * traveled;
-    p.z += p.dz * traveled;
 }

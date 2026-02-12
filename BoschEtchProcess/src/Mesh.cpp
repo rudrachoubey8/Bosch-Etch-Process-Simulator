@@ -22,7 +22,6 @@ static GLuint loadComputeProgram(const char* path) {
         glGetShaderInfoLog(cs, 1024, nullptr, log);
         std::cerr << "COMPUTE SHADER ERROR:\n" << log << std::endl;
         std::abort();
-
     }
 
     GLuint prog = glCreateProgram();

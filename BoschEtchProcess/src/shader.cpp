@@ -25,8 +25,6 @@ Shader::Shader(const string& vertexShader, const string& fragmentShader) {
 
 	shaderProgram = prog;
 };
-
-
 string Shader::readFile(const string& path) {
 
 	ifstream file(path);

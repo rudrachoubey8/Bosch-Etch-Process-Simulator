@@ -3,11 +3,11 @@
 layout(local_size_x=8, local_size_y=8, local_size_z=8) in;
 
 struct Voxel {
-    int solid;
-    int type;
     float threshold;
     float depositThreshold;
     float voxelSize;
+    int solid;
+    int type;
 };
 
 struct Vertex {
@@ -42,9 +42,10 @@ bool solidAt(int x,int y,int z) {
 }
 
 vec3 colorFromType(int t) {
-    if (t==1) return vec3(1,0,0);
+    if (t==1) return vec3(0.5,0.5,0.5);
     if (t==2) return vec3(1,1,1);
-    return vec3(0);
+    if (t==3) return vec3(1,1,0);
+    return vec3(1);
 }
 
 void emitQuad(vec3 base, vec3 du, vec3 dv, vec3 normal, vec3 color) {
@@ -93,7 +94,4 @@ void main() {
     // -Z
     if (!solidAt(p.x,p.y,p.z-1))
         emitQuad(v, vec3(0,1,0), vec3(1,0,0), vec3(0,0,-1), c);
-
-    
-
 }

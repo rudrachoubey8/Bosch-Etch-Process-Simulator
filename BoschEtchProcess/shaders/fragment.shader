@@ -15,10 +15,10 @@ void main()
     vec3 lightDir = normalize(-lightPos + FragPos);
     float diff = abs(dot(norm, lightDir));
 
-    vec3 baseColor = vec3(0.8, 0.2, 0.2);
+    vec3 baseColor = vColor;
     vec3 ambient = 0.1 * baseColor;
     vec3 diffuse = diff * baseColor;
 
     vec3 result = ambient + diffuse;
-    FragColor = vec4(vColor, 1.0);
+    FragColor = vec4(result, 1.0);
 }

@@ -48,7 +48,6 @@ void spawnParticles(Simulation& simulation, int count, bool deposit, bool ion) {
         p.dx = r * cos(phi);
         p.dy = y;
         p.dz = r * sin(phi);
-        
 
         p.x = Mathf::randomFloat(Settings::X);
         p.y = 5 + Mathf::randomFloat(1) * 5;
@@ -79,7 +78,7 @@ void renderMesh(Simulation& simulation) {
     std::cout << "OpenGL version: " << major << "." << minor << std::endl;
 
     glEnable(GL_DEPTH_TEST);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     Shader shader(
         string(PROJECT_ROOT) + "/shaders/vertex.shader",
@@ -109,8 +108,8 @@ void renderMesh(Simulation& simulation) {
 
     float Transform[16] = {
          1,  0,  0,  0,
-         0, -1,  0, -0.5f,
-         0,  0,  1,  0.5f,
+         0, -1,  0, -0.2f,
+         0,  0,  1, 0,
          0,  0,  0,  1
     };
 
@@ -137,6 +136,8 @@ void renderMesh(Simulation& simulation) {
     mesh.initGPU();
     mesh.uploadVoxels();
     mesh.buildMesh();
+    simulation.createBuffers();
+
     std::cout << "vertCount = " << mesh.vertCount << std::endl;
 
     int frame = 0;
@@ -155,7 +156,7 @@ void renderMesh(Simulation& simulation) {
             spawnParticles(simulation, 10000,0,1);
         }
         if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
-            spawnParticles(simulation, 10000, 1, 1);
+            spawnParticles(simulation, 10000, 1, 0);
         }
         if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
             spawnParticles(simulation, 10000, 0, 0);
@@ -177,7 +178,7 @@ void renderMesh(Simulation& simulation) {
 
         // ---- SIMULATION ----
         simulation.tick(Settings::dt);
-
+        
         // ---- UPDATE MESH OCCASIONALLY ----
         frame++;
         if (frame % 10 == 0) {
@@ -188,8 +189,11 @@ void renderMesh(Simulation& simulation) {
         // ---- DRAW ----
         mesh.draw();
 
+
+
         glfwSwapBuffers(window);
         glfwPollEvents();
+
     }
 
     glfwTerminate();
@@ -215,10 +219,27 @@ int main() {
     simulation.initRectangle(
         voxel,
         2, 10, 0,
-        Settings::X - 2, 60, 80
+        Settings::X - 2, 50, 80
     );
 
-    
+
+    Voxel mask{};
+    mask.solid = 1;
+    mask.type = 3;
+    mask.threshold = 5000;
+    mask.depositThreshold = 5000;
+
+    simulation.initRectangle(
+        mask,
+        2, 5, 0,
+        Settings::X - 2, 10, 30
+    );
+    simulation.initRectangle(
+        mask,
+        2, 5, 50,
+        Settings::X - 2, 10, 80
+    );
+
     // -------- RUN --------
     renderMesh(simulation);
 
