@@ -236,14 +236,17 @@ void Simulation::createBuffers() {
     );
 
     uint32_t z2 = 0;
+
     glGenBuffers(1, &finalParticlesCount);
+    
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticlesCount);
+    
     glBufferData(
         GL_SHADER_STORAGE_BUFFER,
         sizeof(uint32_t),
         &z2,
         GL_DYNAMIC_DRAW
-   );
+    );
 }
 
 void Simulation::bindBuffers(){
@@ -281,6 +284,13 @@ void Simulation::uploadVoxels(std::vector<Voxel>& voxels) {
 
 
 void Simulation::resolveHitEvents(std::vector<HitEvent>& hits) {
+    Voxel voxel;
+    voxel.type = 2;
+    voxel.threshold = 1000;
+    voxel.solid = 1;
+    voxel.depositThreshold = 10000;
+    voxel.voxelSize = 1.0f;
+
     for (auto& h : hits) {
         //std::cout << h.damage;
         if (!grid.inBounds(h.cx, h.cy, h.cz)) continue;
@@ -289,18 +299,23 @@ void Simulation::resolveHitEvents(std::vector<HitEvent>& hits) {
 
         if (!v.solid) continue;
 
-        v.threshold -= h.damage;
-
-        if (v.threshold <= 0.0f) {
-            v.solid = 0;
-            v.type = 0;
-        }
+        
 
         if (h.flags & 1) {
             v.depositThreshold -= h.damage;
+
             if (v.depositThreshold <= 0.0f) {
-                //spawnDeposit(h.cx, h.cy, h.cz);
+                v = voxel;
                 v.depositThreshold = 10.0f;
+            }
+        }
+
+        else {
+            v.threshold -= h.damage;
+
+            if (v.threshold <= 0.0f) {
+                v.solid = 0;
+                v.type = 0;
             }
         }
     }

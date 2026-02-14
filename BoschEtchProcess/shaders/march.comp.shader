@@ -92,15 +92,41 @@ void main() {
         Voxel v = voxels[vidx];
 
         if (v.solid != 0) {
+            
+            vec3 local = fract(pos / voxelSize);
+            ivec3 n;
+
+            
+
+            if (local.x < 0.01) n = ivec3(-1,0,0);
+            else if (local.x > 0.99) n = ivec3(1,0,0);
+            else if (local.y < 0.01) n = ivec3(0,-1,0);
+            else if (local.y > 0.99) n = ivec3(0,1,0);
+            else if (local.z < 0.01) n = ivec3(0,0,-1);
+            else n = ivec3(0,0,1);
+            
             float damage = energy * 0.3;
 
             uint writeIdx = atomicAdd(hitCount, 1u);
-            if (writeIdx < MAX_HITS) {
+
+            if (writeIdx >= MAX_HITS) return;
+
+            if (p.deposit == 0) {
                 hits[writeIdx].cx = cell.x;
                 hits[writeIdx].cy = cell.y;
                 hits[writeIdx].cz = cell.z;
                 hits[writeIdx].damage = damage;
                 hits[writeIdx].flags = 0u;
+            }
+            
+            else {
+                ivec3 neighbor = cell + n;
+
+                hits[writeIdx].cx = neighbor.x;
+                hits[writeIdx].cy = neighbor.y;
+                hits[writeIdx].cz = neighbor.z;
+                hits[writeIdx].damage = damage;
+                hits[writeIdx].flags = 1u;
             }
 
             if (v.threshold - damage <= 0.0){
@@ -110,16 +136,6 @@ void main() {
 
             uint h = hash(id ^ uint(step));
             if ((h & 255u) < 150u) {
-                vec3 local = fract(pos / voxelSize);
-                vec3 n;
-
-                if (local.x < 0.01) n = vec3(-1,0,0);
-                else if (local.x > 0.99) n = vec3(1,0,0);
-                else if (local.y < 0.01) n = vec3(0,-1,0);
-                else if (local.y > 0.99) n = vec3(0,1,0);
-                else if (local.z < 0.01) n = vec3(0,0,-1);
-                else n = vec3(0,0,1);
-
                 dir = reflect(dir, n);
             } else {
                 break;
@@ -140,9 +156,11 @@ void main() {
         p.x = pos.x;
         p.y = pos.y;
         p.z = pos.z;
+
         p.dx = dir.x;
         p.dy = dir.y;
         p.dz = dir.z;
+        
         p.energy = energy;
 
         uint idx = atomicAdd(finalParticlesCount, 1u);

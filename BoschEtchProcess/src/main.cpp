@@ -78,7 +78,7 @@ void renderMesh(Simulation& simulation) {
     std::cout << "OpenGL version: " << major << "." << minor << std::endl;
 
     glEnable(GL_DEPTH_TEST);
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     Shader shader(
         string(PROJECT_ROOT) + "/shaders/vertex.shader",
@@ -219,7 +219,7 @@ int main() {
     simulation.initRectangle(
         voxel,
         2, 10, 0,
-        Settings::X - 2, 50, 80
+        Settings::X - 2, 80, 80
     );
 
 
