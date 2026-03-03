@@ -171,7 +171,7 @@ void renderMesh(Simulation& simulation) {
         }
         
         if (!pause && frame % 100 == 0) {
-            //spawnParticles(simulation,1000,0,0);
+            spawnParticles(simulation,1000,0,0);
         }
 
         float c = cos(theta);
