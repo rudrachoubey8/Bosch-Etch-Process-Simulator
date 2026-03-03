@@ -15,7 +15,7 @@ uniform mat4 Rotate;
 
 void main()
 {
-    mat4 Model = Rotate * Transform * Size;
+    mat4 Model = Rotate * Size * Transform;
 
     vec4 worldPos = Model * vec4(aPos, 1.0);
     FragPos = worldPos.xyz;

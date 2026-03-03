@@ -12,7 +12,7 @@ add_executable(BoschEtchProcess
     src/simulation.cpp
     src/structures.cpp
     src/glad.c
- "src/shader.cpp" "include/shader.h" "include/MathUtils.h" "include/glad/glad.h")
+ "src/shader.cpp" "include/shader.h" "include/MathUtils.h" "include/glad/glad.h" "include/simulation.h")
 
 target_compile_definitions(BoschEtchProcess PRIVATE
     PROJECT_ROOT="${PROJECT_SOURCE_DIR}"

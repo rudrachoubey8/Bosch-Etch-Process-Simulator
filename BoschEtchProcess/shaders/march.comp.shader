@@ -84,7 +84,7 @@ void main() {
 
         if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, gridSize)))
         {
-            p.alive = 0;
+           p.alive = 0;
            break;
         }
 
@@ -95,7 +95,6 @@ void main() {
             
             vec3 local = fract(pos / voxelSize);
             ivec3 n;
-
             
 
             if (local.x < 0.01) n = ivec3(-1,0,0);
@@ -105,6 +104,7 @@ void main() {
             else if (local.z < 0.01) n = ivec3(0,0,-1);
             else n = ivec3(0,0,1);
             
+
             float damage = energy * 0.3;
 
             uint writeIdx = atomicAdd(hitCount, 1u);
@@ -127,9 +127,13 @@ void main() {
                 hits[writeIdx].cz = neighbor.z;
                 hits[writeIdx].damage = damage;
                 hits[writeIdx].flags = 1u;
+
+                p.alive = 0;
+                break;
             }
 
             if (v.threshold - damage <= 0.0){
+                v.solid = 0;
                 p.alive = 0;
                 break;
             }
