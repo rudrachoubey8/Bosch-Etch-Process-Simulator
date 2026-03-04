@@ -9,6 +9,7 @@
 
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
+#include <chrono>
 
 using namespace std;
 
@@ -57,6 +58,8 @@ void spawnParticles(Simulation& simulation, int count, bool deposit, bool ion) {
         simulation.initParticle(p);
     }
 }
+using Clock = std::chrono::high_resolution_clock;
+using ms = std::chrono::duration<double, std::milli>;
 
 // ---------------- RENDER LOOP ----------------
 void renderMesh(Simulation& simulation) {
@@ -141,6 +144,7 @@ void renderMesh(Simulation& simulation) {
 
     int frame = 0;
     float theta = 3.14f / 2.0f;
+    float totaltime = 0;
 
     while (!glfwWindowShouldClose(window)) {
 
@@ -175,6 +179,7 @@ void renderMesh(Simulation& simulation) {
             1, GL_TRUE, Rotate
         );
 
+        auto t1 = Clock::now();
         // ---- SIMULATION ----
         simulation.tick(Settings::dt);
 
@@ -187,6 +192,15 @@ void renderMesh(Simulation& simulation) {
         
         // ---- DRAW ----
         mesh.draw();
+        auto t2 = Clock::now();
+        totaltime += ms(t2 - t1).count();
+
+
+        if (frame % 120 == 0) {
+            cout << "Total Time: " << totaltime << endl;
+            cout << "--------------";
+            totaltime = 0;
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -214,8 +228,8 @@ int main() {
 
     simulation.initRectangle(
         voxel,
-        2, 10, 0,
-        Settings::X - 2, 60, 80
+        0, 0, 0,
+        Settings::X, Settings::Y, Settings::Z
     );
 
     
