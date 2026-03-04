@@ -153,8 +153,6 @@ void renderMesh(Simulation& simulation) {
     float theta = 3.14159f / 2.0f;
 
     double tickTime = 0;
-    double uploadTime = 0;
-    double buildTime = 0;
     bool pause = false;
     while (!glfwWindowShouldClose(window)) {
 
@@ -192,23 +190,13 @@ void renderMesh(Simulation& simulation) {
         // ---------------- SIMULATION TIMING ----------------
         auto t1 = Clock::now();
         simulation.tick(Settings::dt);
-        auto t2 = Clock::now();
-        tickTime += ms(t2 - t1).count();
 
         // ---------------- MESH UPDATE TIMING ----------------
         frame++;
 
         if (frame % 10 == 0) {
-
-            auto u1 = Clock::now();
             mesh.uploadVoxels();
-            auto u2 = Clock::now();
-            uploadTime += ms(u2 - u1).count();
-
-            auto b1 = Clock::now();
             mesh.buildMesh();
-            auto b2 = Clock::now();
-            buildTime += ms(b2 - b1).count();
         }
 
         mesh.draw();
@@ -216,16 +204,15 @@ void renderMesh(Simulation& simulation) {
         glfwSwapBuffers(window);
         glfwPollEvents();
 
+        auto t2 = Clock::now();
+        tickTime += ms(t2 - t1).count();
+
         // ---- Print every 120 frames ----
         if (frame % 120 == 0) {
             cout << "Tick avg:   " << tickTime / 120.0 << " ms\n";
-            cout << "Upload avg: " << uploadTime / 12.0 << " ms\n";
-            cout << "Build avg:  " << buildTime / 12.0 << " ms\n";
             cout << "-----------------------------\n";
 
             tickTime = 0;
-            uploadTime = 0;
-            buildTime = 0;
         }
     }
 
@@ -248,14 +235,14 @@ int main() {
     voxel.threshold = 100;
     voxel.depositThreshold = 10;
 
-    /*simulation.initRectangle(
+    simulation.initRectangle(
         voxel,
         0, 0, 0,
         Settings::X, Settings::Y, Settings::Z
-    );*/
+    );
 
 
-    Voxel mask{};
+    /*Voxel mask{};
     mask.solid = 1;
     mask.type = 3;
     mask.threshold = 5000;
@@ -318,7 +305,7 @@ int main() {
         mask,
         0, 5, 80,
         20, 10, 100
-    );
+    );*/
 
     // -------- RUN --------
     renderMesh(simulation);
