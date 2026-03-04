@@ -16,7 +16,7 @@ struct Vertex {
     vec3 color;
 };
 
-layout(std430, binding = 0) readonly buffer Voxels {
+layout(std430, binding = 6) readonly buffer Voxels {
     Voxel voxels[];
 };
 

@@ -34,10 +34,12 @@ static GLuint loadComputeProgram(const char* path) {
     }
 
     GLuint prog = glCreateProgram();
+    
     glAttachShader(prog, cs);
     glLinkProgram(prog);
 
     glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+
     if (!ok) {
         char log[1024];
         glGetProgramInfoLog(prog, 1024, nullptr, log);
@@ -76,23 +78,16 @@ void Simulation::initParticle(const Particle& particle) {
     particles.push_back(particle);
 }
 
-void Simulation::tick(float dt) {
-    int SUBSTEPS = 1;
-    float subDt = dt / SUBSTEPS;
+void Simulation::tick(float dt)
+{
     bindBuffers();
 
-    for (int i = 0; i < SUBSTEPS; ++i) {
-        uploadParticles(particles);
-        uploadVoxels(grid.voxels);
+    uploadParticles(particles);
 
-        dispatchRayMarch(rayMarchProgram, particles.size());
-
-        auto hits = downloadHits();
-        resolveHitEvents(hits);
-    }
-
-    particles = downloadParticles();
+    dispatchRayMarch(rayMarchProgram, particles.size());
+    dispatchHits(resolveHitsProgram);
     
+    particles = downloadParticles();
 }
 
 void Simulation::dispatchRayMarch(GLuint program, int particleCount)
@@ -179,13 +174,12 @@ std::vector<Particle> Simulation::downloadParticles()
     return gpuParticles;
 }
 
-
-
-
 void Simulation::createBuffers() {
-
     std::string path = std::string(PROJECT_ROOT) + "/shaders/march.comp.shader";
     rayMarchProgram = loadComputeProgram(path.c_str());
+
+    std::string path2 = std::string(PROJECT_ROOT) + "/shaders/resolveHits.shader";
+    resolveHitsProgram = loadComputeProgram(path2.c_str());
 
     glGenBuffers(1, &particleSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleSSBO);
@@ -214,8 +208,6 @@ void Simulation::createBuffers() {
         GL_DYNAMIC_DRAW
     );
 
-    
-
     glGenBuffers(1, &finalParticles);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticles);
     glBufferData(
@@ -238,15 +230,14 @@ void Simulation::createBuffers() {
     uint32_t z2 = 0;
 
     glGenBuffers(1, &finalParticlesCount);
-    
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticlesCount);
-    
     glBufferData(
         GL_SHADER_STORAGE_BUFFER,
         sizeof(uint32_t),
         &z2,
         GL_DYNAMIC_DRAW
     );
+
 }
 
 void Simulation::bindBuffers(){
@@ -276,47 +267,25 @@ void Simulation::uploadVoxels(std::vector<Voxel>& voxels) {
     glBufferSubData(
         GL_SHADER_STORAGE_BUFFER,
         0,
-        grid.voxels.size() * sizeof(Voxel),
-        grid.voxels.data()
+        voxels.size() * sizeof(Voxel),
+        voxels.data()
     );
 }
 
+void Simulation::dispatchHits(GLuint program) {
 
+    uint32_t hitCount = 0;
 
-void Simulation::resolveHitEvents(std::vector<HitEvent>& hits) {
-    Voxel voxel;
-    voxel.type = 2;
-    voxel.threshold = 1000;
-    voxel.solid = 1;
-    voxel.depositThreshold = 10000;
-    voxel.voxelSize = 1.0f;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &hitCount);
 
-    for (auto& h : hits) {
-        //std::cout << h.damage;
-        if (!grid.inBounds(h.cx, h.cy, h.cz)) continue;
+    if (hitCount == 0) return;
 
-        Voxel& v = grid.at(h.cx, h.cy, h.cz);
+    glUseProgram(program);
+    glUniform3i(glGetUniformLocation(program, "gridSize"), grid.X, grid.Y, grid.Z);
 
-        if (!v.solid) continue;
+    int groups = (hitCount + 255) / 256;
 
-        
-
-        if (h.flags & 1) {
-            v.depositThreshold -= h.damage;
-
-            if (v.depositThreshold <= 0.0f) {
-                v = voxel;
-                v.depositThreshold = 10.0f;
-            }
-        }
-
-        else {
-            v.threshold -= h.damage;
-
-            if (v.threshold <= 0.0f) {
-                v.solid = 0;
-                v.type = 0;
-            }
-        }
-    }
+    glDispatchCompute(groups, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }

@@ -54,18 +54,12 @@ void Mesh::setRenderingProgram(GLuint shaderProgram) {
     renderProgram = shaderProgram;
 }
 
+void Mesh::setVoxelBuffer(GLuint ssbo){
+    voxelSSBO = ssbo;
+}
+
 void Mesh::initGPU() {
     const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 36;
-
-    // voxel SSBO
-    glGenBuffers(1, &voxelSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        grid.X * grid.Y * grid.Z * sizeof(Voxel),
-        nullptr,
-        GL_STATIC_DRAW
-    );
 
     // vertex SSBO
     glGenBuffers(1, &vertexSSBO);
@@ -88,8 +82,7 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
-    // bind points
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, voxelSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
 
@@ -113,16 +106,6 @@ void Mesh::initGPU() {
     std::string path = std::string(PROJECT_ROOT) + "/shaders/mesh.comp.shader";
     computeProgram = loadComputeProgram(path.c_str());
 
-}
-
-void Mesh::uploadVoxels() {
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
-    glBufferSubData(
-        GL_SHADER_STORAGE_BUFFER,
-        0,
-        grid.X * grid.Y * grid.Z * sizeof(Voxel),
-        grid.voxels.data()
-    );
 }
 
 void Mesh::buildMesh() {

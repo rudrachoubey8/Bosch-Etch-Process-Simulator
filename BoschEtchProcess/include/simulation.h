@@ -11,7 +11,7 @@ public:
 	float voxelSize;
 	Grid grid;
 	std::vector<Particle> particles;
-
+	GLuint voxelSSBO = 0;
 
 	Simulation(int X, int Y, int Z, float voxelSize);
 
@@ -26,19 +26,17 @@ public:
 	void uploadParticles(std::vector<Particle>& particles);
 	void uploadVoxels(std::vector<Voxel>& voxels);
 	void dispatchRayMarch(GLuint program, int particleCount);
-
+	void dispatchHits(GLuint program);
 
 	std::vector<HitEvent> downloadHits();
 	std::vector<Particle> downloadParticles();
-
-	void resolveHitEvents(std::vector<HitEvent>& hitevents);
-
+	
 private:
 
 	uint32_t MAX_PARTICLES = 1000000;
 	uint32_t MAX_HITS = 50000;
 	uint32_t MAX_STEPS = 5000;
 	float MIN_ENERGY = 1e-6f;
-	GLuint particleSSBO = 0, voxelSSBO = 0, hitSSBO = 0, counterSSBO = 0, rayMarchProgram = 0, finalParticlesCount = 0, finalParticles = 0;
-
+	GLuint particleSSBO = 0, hitSSBO = 0, counterSSBO = 0, rayMarchProgram = 0, finalParticlesCount = 0, finalParticles = 0;
+	GLuint resolveHitsProgram = 0;
 };

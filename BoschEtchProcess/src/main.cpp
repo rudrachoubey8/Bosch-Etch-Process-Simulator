@@ -12,7 +12,7 @@
 #include <chrono>
 
 using namespace std;
-// ---------------- RANDOM ----------------
+// ---------------- RANDOM --------------------------
 namespace Mathf {
     float randomFloat(float max) {
         static std::mt19937 gen{ std::random_device{}() };
@@ -22,7 +22,6 @@ namespace Mathf {
 }
 
 // ---------------- PARTICLE SPAWNER ----------------
-
 void spawnParticles(Simulation& simulation, int count, bool deposit, bool ion) {
 
     constexpr float pi = 3.1415926f;
@@ -142,33 +141,39 @@ void renderMesh(Simulation& simulation) {
 
     // ---------------- MESH ----------------
     Mesh mesh(simulation.grid);
+
     mesh.setRenderingProgram(shader.shaderProgram);
 
-    mesh.initGPU();
-    mesh.uploadVoxels();
-    mesh.buildMesh();
     simulation.createBuffers();
+    simulation.uploadVoxels(simulation.grid.voxels);
+
+
+    mesh.initGPU();
+    mesh.setVoxelBuffer(simulation.voxelSSBO);
+    mesh.buildMesh();
 
     int frame = 0;
     float theta = 3.14159f / 2.0f;
 
     double tickTime = 0;
-    double uploadTime = 0;
     double buildTime = 0;
+
     bool pause = false;
+
     while (!glfwWindowShouldClose(window)) {
 
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-            theta -= 0.001f;
+            theta -= 0.01f;
+        
         if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-            theta += 0.001f;
+            theta += 0.01f; 
 
-        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
             pause = !pause;
-        }
+        
         
         if (!pause && frame % 100 == 0) {
             spawnParticles(simulation,1000,0,0);
@@ -199,15 +204,10 @@ void renderMesh(Simulation& simulation) {
         frame++;
 
         if (frame % 10 == 0) {
-
-            auto u1 = Clock::now();
-            mesh.uploadVoxels();
-            auto u2 = Clock::now();
-            uploadTime += ms(u2 - u1).count();
-
             auto b1 = Clock::now();
             mesh.buildMesh();
             auto b2 = Clock::now();
+
             buildTime += ms(b2 - b1).count();
         }
 
@@ -219,12 +219,10 @@ void renderMesh(Simulation& simulation) {
         // ---- Print every 120 frames ----
         if (frame % 120 == 0) {
             cout << "Tick avg:   " << tickTime / 120.0 << " ms\n";
-            cout << "Upload avg: " << uploadTime / 12.0 << " ms\n";
             cout << "Build avg:  " << buildTime / 12.0 << " ms\n";
             cout << "-----------------------------\n";
 
             tickTime = 0;
-            uploadTime = 0;
             buildTime = 0;
         }
     }
@@ -243,19 +241,15 @@ int main() {
     );
 
     Voxel voxel{};
+    
     voxel.solid = 1;
     voxel.type = 1;
     voxel.threshold = 100;
     voxel.depositThreshold = 10;
 
-    /*simulation.initRectangle(
-        voxel,
-        0, 0, 0,
-        Settings::X, Settings::Y, Settings::Z
-    );*/
-
 
     Voxel mask{};
+
     mask.solid = 1;
     mask.type = 3;
     mask.threshold = 5000;
@@ -319,6 +313,7 @@ int main() {
         0, 5, 80,
         20, 10, 100
     );
+
 
     // -------- RUN --------
     renderMesh(simulation);
