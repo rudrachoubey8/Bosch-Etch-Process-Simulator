@@ -86,7 +86,7 @@ void renderMesh(Simulation& simulation) {
     );
 
     glEnable(GL_DEPTH_TEST);
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     Shader shader(
         string(PROJECT_ROOT) + "/shaders/vertex.shader",
@@ -171,12 +171,13 @@ void renderMesh(Simulation& simulation) {
         if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
             theta += 0.01f; 
 
-        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
             pause = !pause;
+        }
         
         
-        if (!pause && frame % 100 == 0) {
-            spawnParticles(simulation,1000,0,0);
+        if (!pause && frame % 10 == 0) {
+            spawnParticles(simulation,100,0,0);
         }
 
         float c = cos(theta);
