@@ -25,6 +25,48 @@ namespace Mathf {
 using Clock = std::chrono::high_resolution_clock;
 using ms = std::chrono::duration<double, std::milli>;
 
+// ---------------- CAMERA ----------------
+float yaw = 3.14159f / 2.0f;
+float pitch = 0.0f;
+float D = 2.5f;
+
+double lastMouseX = 0;
+double lastMouseY = 0;
+bool firstMouse = true;
+
+void mouseCallback(GLFWwindow* window, double xpos, double ypos)
+{
+    if (firstMouse)
+    {
+        lastMouseX = xpos;
+        lastMouseY = ypos;
+        firstMouse = false;
+    }
+
+    double dx = xpos - lastMouseX;
+    double dy = ypos - lastMouseY;
+
+    lastMouseX = xpos;
+    lastMouseY = ypos;
+
+    float sensitivity = 0.005f;
+
+    yaw += dx * sensitivity;
+    pitch += dy * sensitivity;
+
+    if (pitch > 1.5f) pitch = 1.5f;
+    if (pitch < -1.5f) pitch = -1.5f;
+}
+
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    D -= yoffset * 0.3f;
+
+    if (D < 0.3f) D = 0.3f;
+    if (D > 20.0f) D = 20.0f;
+}
+
+
 void renderMesh(Simulation& simulation) {
 
     if (!glfwInit()) return;
@@ -39,7 +81,8 @@ void renderMesh(Simulation& simulation) {
     GLFWwindow* window =
         glfwCreateWindow(width, height, "Bosch Etch Mesh", nullptr, nullptr);
     if (!window) return;
-
+    glfwSetCursorPosCallback(window, mouseCallback);
+    glfwSetScrollCallback(window, scrollCallback);
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
@@ -74,12 +117,13 @@ void renderMesh(Simulation& simulation) {
         0, 0, -2.0f / (farP - nearP), -(farP + nearP) / (farP - nearP),
         0, 0, 0, 1
     };
+    float scale = 2.0f / (100.0f * D);
 
     float Size[16] = {
-        2.0f / 100.0f, 0, 0, 0.0f,
-        0, 2.0f / 100.0f, 0, 0.0f,
-        0, 0, 2.0f / 100.0f, 0.0f,
-        0, 0, 0, 1
+        scale,0,0,0,
+        0,scale,0,0,
+        0,0,scale,0,
+        0,0,0,1
     };
 
     float Transform[16] = {
@@ -120,8 +164,6 @@ void renderMesh(Simulation& simulation) {
     mesh.buildMesh();
 
     int frame = 0;
-    float theta = 3.14159f / 2.0f;
-
     double tickTime = 0;
 
     bool pause = false;
@@ -130,12 +172,6 @@ void renderMesh(Simulation& simulation) {
 
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-            theta -= 0.01f;
-        
-        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-            theta += 0.01f; 
 
         if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
             //pause = !pause;
@@ -155,14 +191,17 @@ void renderMesh(Simulation& simulation) {
             simulation.uploadParticles(10000, 1, 1, Mathf::randomFloat(1000));
         }*/
 
-        float c = cos(theta);
-        float s = sin(theta);
+        float cy = cos(yaw);
+        float sy = sin(yaw);
+
+        float cx = cos(pitch);
+        float sx = sin(pitch);
 
         float Rotate[16] = {
-             c, 0,  s, 0,
-             0, 1,  0, 0,
-            -s, 0,  c, 0,
-             0, 0,  0, 1
+            cy,        0,     sy, 0,
+            sx * sy,     cx,   -sx * cy, 0,
+           -cx * sy,     sx,    cx * cy, 0,
+            0,         0,     0, 1
         };
 
         glUniformMatrix4fv(
