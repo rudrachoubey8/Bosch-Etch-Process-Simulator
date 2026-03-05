@@ -21,6 +21,8 @@ layout(std430, binding = 9) buffer FinalParticlesCount {
 
 uniform uint startIndex;
 uniform uint particleCount;
+uniform int type;
+
 
 uniform float cosTheta;
 uniform float X;
@@ -47,7 +49,7 @@ void main()
     float phi = 6.28318530718 * v;
     float r = sqrt(1.0 - y * y);
 
-    particles[index].deposit = 0;
+    particles[index].deposit = type;
     particles[index].speed = 10.0;
     particles[index].alive = 1;
     particles[index].energy = 50.0;

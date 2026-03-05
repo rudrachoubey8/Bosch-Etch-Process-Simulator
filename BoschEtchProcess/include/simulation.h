@@ -23,7 +23,7 @@ public:
 
 	void createBuffers();
 	void bindBuffers();
-	void uploadParticles(int n, bool type, float random);
+	void uploadParticles(int n, bool type, bool deposit, float random);
 	void uploadVoxels(std::vector<Voxel>& voxels);
 	void dispatchRayMarch(GLuint program, int particleCount);
 	void dispatchHits(GLuint program);

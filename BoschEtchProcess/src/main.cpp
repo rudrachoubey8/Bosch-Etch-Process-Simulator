@@ -138,14 +138,22 @@ void renderMesh(Simulation& simulation) {
             theta += 0.01f; 
 
         if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
-            pause = !pause;
-            simulation.uploadParticles(1000, 0, Mathf::randomFloat(30));
+            //pause = !pause;
+            simulation.uploadParticles(10000, 0, 1, Mathf::randomFloat(1000));
         }
-        
-        
-        if (!pause && frame % 100 == 0) {
-            //spawnParticles(simulation,10000,0,0);
+        if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+            //pause = !pause;
+            simulation.uploadParticles(10000, 0, 0, Mathf::randomFloat(1000));
         }
+        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
+            //pause = !pause;
+            simulation.uploadParticles(10000, 1, 0, Mathf::randomFloat(1000));
+        }
+
+        
+        /*if (!pause && frame % 10 == 0) {
+            simulation.uploadParticles(10000, 1, 1, Mathf::randomFloat(1000));
+        }*/
 
         float c = cos(theta);
         float s = sin(theta);

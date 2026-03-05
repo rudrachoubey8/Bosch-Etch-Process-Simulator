@@ -44,7 +44,7 @@ bool solidAt(int x,int y,int z) {
 vec3 colorFromType(int t) {
     if (t==1) return vec3(0.5,0.5,0.5);
     if (t==2) return vec3(1,1,1);
-    if (t==3) return vec3(1,1,0);
+    if (t==3) return vec3(1,1,0); 
     return vec3(1);
 }
 
