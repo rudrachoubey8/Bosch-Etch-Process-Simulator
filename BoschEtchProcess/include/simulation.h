@@ -23,13 +23,13 @@ public:
 
 	void createBuffers();
 	void bindBuffers();
-	void uploadParticles(std::vector<Particle>& particles);
+	void uploadParticles(int n, bool type, float random);
 	void uploadVoxels(std::vector<Voxel>& voxels);
 	void dispatchRayMarch(GLuint program, int particleCount);
 	void dispatchHits(GLuint program);
 
 	std::vector<HitEvent> downloadHits();
-	std::vector<Particle> downloadParticles();
+	int getParticleCount();
 	
 private:
 
@@ -39,4 +39,5 @@ private:
 	float MIN_ENERGY = 1e-6f;
 	GLuint particleSSBO = 0, hitSSBO = 0, counterSSBO = 0, rayMarchProgram = 0, finalParticlesCount = 0, finalParticles = 0;
 	GLuint resolveHitsProgram = 0;
+	GLuint initParticlesProgram = 0;
 };

@@ -82,12 +82,8 @@ void Simulation::tick(float dt)
 {
     bindBuffers();
 
-    uploadParticles(particles);
-
-    dispatchRayMarch(rayMarchProgram, particles.size());
+    dispatchRayMarch(rayMarchProgram, getParticleCount());
     dispatchHits(resolveHitsProgram);
-    
-    particles = downloadParticles();
 }
 
 void Simulation::dispatchRayMarch(GLuint program, int particleCount)
@@ -147,7 +143,7 @@ std::vector<HitEvent> Simulation::downloadHits() {
     return hits;
 }
 
-std::vector<Particle> Simulation::downloadParticles()
+int Simulation::getParticleCount()
 {
     uint32_t count = 0;
 
@@ -161,17 +157,7 @@ std::vector<Particle> Simulation::downloadParticles()
 
     count = std::min(count, (uint32_t)MAX_PARTICLES);
 
-    std::vector<Particle> gpuParticles(count);
-
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticles);
-    glGetBufferSubData(
-        GL_SHADER_STORAGE_BUFFER,
-        0,
-        count * sizeof(Particle),
-        gpuParticles.data()
-    );
-
-    return gpuParticles;
+    return count;
 }
 
 void Simulation::createBuffers() {
@@ -180,6 +166,9 @@ void Simulation::createBuffers() {
 
     std::string path2 = std::string(PROJECT_ROOT) + "/shaders/resolveHits.shader";
     resolveHitsProgram = loadComputeProgram(path2.c_str());
+
+    std::string path3 = std::string(PROJECT_ROOT) + "/shaders/particle.init.shader";
+    initParticlesProgram = loadComputeProgram(path3.c_str());
 
     glGenBuffers(1, &particleSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleSSBO);
@@ -252,14 +241,26 @@ void Simulation::bindBuffers(){
 
 }
 
-void Simulation::uploadParticles(std::vector<Particle>& particles) {
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleSSBO);
-    glBufferSubData(
-        GL_SHADER_STORAGE_BUFFER,
-        0,
-        particles.size() * sizeof(Particle),
-        particles.data()
-    );
+void Simulation::uploadParticles(int n, bool type, float random) {
+
+    constexpr float pi = 3.1415926f;
+    float halfAngle = type ? pi / 10.0f : pi / 2.0f;
+
+    float cosTheta = cos(halfAngle);
+    
+    glUseProgram(initParticlesProgram);
+
+    glUniform1ui(glGetUniformLocation(initParticlesProgram, "startIndex"), getParticleCount());
+    glUniform1ui(glGetUniformLocation(initParticlesProgram, "particleCount"), n);
+
+    glUniform1f(glGetUniformLocation(initParticlesProgram, "cosTheta"), cosTheta);
+    glUniform1f(glGetUniformLocation(initParticlesProgram, "X"), Settings::X);
+    glUniform1f(glGetUniformLocation(initParticlesProgram, "Z"), Settings::Z);
+    glUniform1f(glGetUniformLocation(initParticlesProgram, "seed"), random);
+
+    glDispatchCompute((n + 255) / 256, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
 }
 
 void Simulation::uploadVoxels(std::vector<Voxel>& voxels) {

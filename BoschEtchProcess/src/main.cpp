@@ -21,39 +21,6 @@ namespace Mathf {
     }
 }
 
-// ---------------- PARTICLE SPAWNER ----------------
-void spawnParticles(Simulation& simulation, int count, bool deposit, bool ion) {
-
-    constexpr float pi = 3.1415926f;
-    float halfAngle = ion ? pi / 10.0f : pi/2.0f;
-
-    float cosTheta = cos(halfAngle);
-
-    for (int i = 0; i < count; i++) {
-
-        Particle p{};
-        p.deposit = deposit;
-        p.speed = 10.0f;
-        p.energy = 50.0f;
-
-        float u = Mathf::randomFloat(1);
-        float v = Mathf::randomFloat(1);
-
-        float y = cosTheta + u * (1.0f - cosTheta);
-        float phi = 2.0f * pi * v;
-        float r = sqrt(1.0f - y * y);
-
-        p.dx = r * cos(phi);
-        p.dy = y;
-        p.dz = r * sin(phi);
-
-        p.x = Mathf::randomFloat(Settings::X);
-        p.y = 1;
-        p.z = Mathf::randomFloat(Settings::Z);;
-
-        simulation.initParticle(p);
-    }
-}
 
 using Clock = std::chrono::high_resolution_clock;
 using ms = std::chrono::duration<double, std::milli>;
@@ -97,7 +64,7 @@ void renderMesh(Simulation& simulation) {
 
     // MATRICES
     // ---------- MATRICES ----------
-    float aspect = 1280.0f / 720.0f;
+    float aspect = float(width) / float(height);
     float nearP = -10.0f;
     float farP = 10.0f;
 
@@ -117,7 +84,7 @@ void renderMesh(Simulation& simulation) {
 
     float Transform[16] = {
         1, 0,  0, -Settings::X/2,
-        0, -1, 0, 0,
+        0, -1, 0, Settings::Y/2,
         0, 0,  1, -Settings::Z/2,
         0, 0,  0, 1
     };
@@ -172,6 +139,7 @@ void renderMesh(Simulation& simulation) {
 
         if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
             pause = !pause;
+            simulation.uploadParticles(1000, 0, Mathf::randomFloat(30));
         }
         
         
@@ -242,14 +210,18 @@ int main() {
     voxel.threshold = 100;
     voxel.depositThreshold = 10;
 
-    simulation.initRectangle(voxel, 0,0,0,Settings::X, Settings::Y, Settings::Z);
-
-    /*Voxel mask{};
+    Voxel mask{};
 
     mask.solid = 1;
     mask.type = 3;
     mask.threshold = 5000;
     mask.depositThreshold = 5000;
+
+    simulation.initRectangle(mask, 0, 5, 0,Settings::X, 10, Settings::Z/3);
+    simulation.initRectangle(mask, 0, 5, 2 * Settings::Z / 3, Settings::X, 10, Settings::Z);
+    simulation.initRectangle(voxel, 0,10,0,Settings::X, Settings::Y, Settings::Z);
+
+    /*
 
     simulation.initRectangle(
         mask,
