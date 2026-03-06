@@ -81,8 +81,10 @@ void renderMesh(Simulation& simulation) {
     GLFWwindow* window =
         glfwCreateWindow(width, height, "Bosch Etch Mesh", nullptr, nullptr);
     if (!window) return;
+
     glfwSetCursorPosCallback(window, mouseCallback);
     glfwSetScrollCallback(window, scrollCallback);
+
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
@@ -117,14 +119,6 @@ void renderMesh(Simulation& simulation) {
         0, 0, -2.0f / (farP - nearP), -(farP + nearP) / (farP - nearP),
         0, 0, 0, 1
     };
-    float scale = 2.0f / (100.0f * D);
-
-    float Size[16] = {
-        scale,0,0,0,
-        0,scale,0,0,
-        0,0,scale,0,
-        0,0,0,1
-    };
 
     float Transform[16] = {
         1, 0,  0, -Settings::X/2,
@@ -145,10 +139,6 @@ void renderMesh(Simulation& simulation) {
     );
 
     
-    glUniformMatrix4fv(
-        glGetUniformLocation(shader.shaderProgram, "Size"),
-        1, GL_TRUE, Size
-    );
 
     // ---------------- MESH ----------------
     Mesh mesh(simulation.grid);
@@ -208,6 +198,18 @@ void renderMesh(Simulation& simulation) {
             glGetUniformLocation(shader.shaderProgram, "Rotate"),
             1, GL_TRUE, Rotate
         );
+        float scale = 2.0f / (100.0f * D);
+
+        float Size[16] = {
+            scale,0,0,0,
+            0,scale,0,0,
+            0,0,scale,0,
+            0,0,0,1
+        };
+        glUniformMatrix4fv(
+            glGetUniformLocation(shader.shaderProgram, "Size"),
+            1, GL_TRUE, Size
+        );
 
         // ---------------- SIMULATION TIMING ----------------
         auto t1 = Clock::now();
@@ -264,9 +266,9 @@ int main() {
     mask.threshold = 5000;
     mask.depositThreshold = 5000;
 
-    simulation.initRectangle(mask, 0, 5, 0,Settings::X, 10, Settings::Z/3);
-    simulation.initRectangle(mask, 0, 5, 2 * Settings::Z / 3, Settings::X, 10, Settings::Z);
-    simulation.initRectangle(voxel, 0,10,0,Settings::X, Settings::Y, Settings::Z);
+    simulation.initRectangle(mask, 20, 5, 0,Settings::X - 20, 10, Settings::Z/3);
+    simulation.initRectangle(mask, 20, 5, 2 * Settings::Z / 3, Settings::X - 20, 10, Settings::Z);
+    simulation.initRectangle(voxel, 20,10,0,Settings::X-20, Settings::Y, Settings::Z);
 
     /*
 

@@ -41,8 +41,8 @@ bool solidAt(int x,int y,int z) {
     return voxels[idx(x,y,z)].solid != 0;
 }
 
-vec3 colorFromType(int t) {
-    if (t==1) return vec3(0.6,0.6,0.6);
+vec3 colorFromType(int id, int t) {
+    if (t==1) return vec3(id/100.0,(1-id/100.0),0);
     if (t==2) return vec3(1,1,1);
     if (t==3) return vec3(1,1,0); 
     return vec3(1);
@@ -68,7 +68,7 @@ void main() {
     int id = idx(p.x,p.y,p.z);
     if (voxels[id].solid == 0) return;
 
-    vec3 c = colorFromType(voxels[id].type);
+    vec3 c = colorFromType(p.y, voxels[id].type);
     vec3 v = vec3(p);
 
     // +X

@@ -105,7 +105,7 @@ void main() {
             else n = ivec3(0,0,1);
             
 
-            float damage = energy * 0.3;
+            float damage = 10;
 
             uint writeIdx = atomicAdd(hitCount, 1u);
 
