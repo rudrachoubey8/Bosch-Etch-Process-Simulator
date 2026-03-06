@@ -213,6 +213,9 @@ void renderMesh(Simulation& simulation) {
 
         // ---------------- SIMULATION TIMING ----------------
         auto t1 = Clock::now();
+        if (frame <= 1000 && frame % 10 == 0) {
+            simulation.uploadParticles(100000, 0, 0, Mathf::randomFloat(1000));
+        }
         simulation.tick(Settings::dt);
 
         // ---------------- MESH UPDATE TIMING ----------------
@@ -220,7 +223,6 @@ void renderMesh(Simulation& simulation) {
 
         if (frame % 10 == 0) {
             mesh.buildMesh();
-
         }
 
         mesh.draw();
@@ -231,8 +233,8 @@ void renderMesh(Simulation& simulation) {
         auto t2 = Clock::now();
         tickTime += ms(t2 - t1).count();
         // ---- Print every 120 frames ----
-        if (frame % 120 == 0) {
-            cout << "Total time:   " << tickTime / 120.0 << " ms\n";
+        if (frame % 1000 == 0) {
+            cout << "Total time:   " << tickTime / 1000.0 << " ms\n";
             cout << "-----------------------------\n";
 
             tickTime = 0;
@@ -266,9 +268,9 @@ int main() {
     mask.threshold = 5000;
     mask.depositThreshold = 5000;
 
-    simulation.initRectangle(mask, 20, 5, 0,Settings::X - 20, 10, Settings::Z/3);
-    simulation.initRectangle(mask, 20, 5, 2 * Settings::Z / 3, Settings::X - 20, 10, Settings::Z);
-    simulation.initRectangle(voxel, 20,10,0,Settings::X-20, Settings::Y, Settings::Z);
+    /*simulation.initRectangle(mask, 20, 5, 0,Settings::X - 20, 10, Settings::Z/3);
+    simulation.initRectangle(mask, 20, 5, 2 * Settings::Z / 3, Settings::X - 20, 10, Settings::Z);*/
+    simulation.initRectangle(voxel, 0,5,0,Settings::X, Settings::Y, Settings::Z);
 
     /*
 
