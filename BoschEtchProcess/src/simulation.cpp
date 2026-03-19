@@ -147,6 +147,21 @@ std::vector<HitEvent> Simulation::downloadHits() {
     return hits;
 }
 
+
+void Simulation::downloadVoxels() {
+
+    
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        Settings::X * Settings::Y * Settings::Z * sizeof(Voxel),
+        grid.voxels.data()
+    );
+
+}
+
+
 int Simulation::getParticleCount()
 {
     uint32_t count = 0;

@@ -7,6 +7,7 @@
 #include "settings.h"
 #include "Mesh.h"
 
+#include "Measurments.h"
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <chrono>
@@ -34,11 +35,10 @@ Vec3 normalize(Vec3 v)
     return { v.x / l,v.y / l,v.z / l };
 };
 
-
 using Clock = std::chrono::high_resolution_clock;
 using ms = std::chrono::duration<double, std::milli>;
 
-// ---------------- CAMERA ----------------
+// Camera Properties
 float yaw = 3.14159f / 2.0f;
 float pitch = 0.0f;
 float D = 2.5f;
@@ -72,10 +72,12 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos)
 
     float sensitivity = 0.005f;
 
+    // Only rotate if button is pressed
     if(buttonDown){
         yaw += dx * sensitivity;
         pitch += dy * sensitivity;
     }
+
     if (pitch > 1.5f) pitch = 1.5f;
     if (pitch < -1.5f) pitch = -1.5f;
 }
@@ -119,7 +121,8 @@ void renderMesh(Simulation& simulation) {
     GLFWwindow* window =
         glfwCreateWindow(width, height, "Bosch Etch Mesh", nullptr, nullptr);
     if (!window) return;
-
+    
+    //Initialize callback functions
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetCursorPosCallback(window, mouseCallback);
     glfwSetScrollCallback(window, scrollCallback);
@@ -127,7 +130,7 @@ void renderMesh(Simulation& simulation) {
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
-    // ---- Center window on primary monitor ----
+    // Initialize OpenGL window centered on the screen
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(monitor);
     glfwSetWindowPos(
@@ -147,7 +150,6 @@ void renderMesh(Simulation& simulation) {
     glUseProgram(shader.shaderProgram);
 
     // MATRICES
-    // ---------- MATRICES ----------
     float aspect = float(width) / float(height);
     float nearP = -10.0f;
     float farP = 10.0f;
@@ -166,7 +168,7 @@ void renderMesh(Simulation& simulation) {
         0, 0,  0, 1
     };
 
-
+    // Initialize Matrices
     glUniformMatrix4fv(
         glGetUniformLocation(shader.shaderProgram, "Projection"),
         1, GL_TRUE, Projection
@@ -178,8 +180,7 @@ void renderMesh(Simulation& simulation) {
     );
 
     
-
-    // ---------------- MESH ----------------
+    // Inititalize Mesh 
     Mesh mesh(simulation.grid);
 
     mesh.setRenderingProgram(shader.shaderProgram);
@@ -196,6 +197,9 @@ void renderMesh(Simulation& simulation) {
     double tickTime = 0;
 
     bool pause = false;
+
+    // Initialize Measurment function
+    Measure measure;
 
     while (!glfwWindowShouldClose(window)) {
 
@@ -305,16 +309,13 @@ void renderMesh(Simulation& simulation) {
             1, GL_TRUE, Size
         );
 
-        // ---------------- SIMULATION TIMING ----------------
         auto t1 = Clock::now();
         
-        if (frame <= 10000 && frame % 100 == 0) {
+        if (frame <= 1000 && frame % 10 == 0) {
             simulation.uploadParticles(100000, 0, 0, Mathf::randomFloat(1000));
         }
 
         simulation.tick(Settings::dt);
-
-        // ---------------- MESH UPDATE TIMING ----------------
         frame++;
 
         if (frame % 10 == 0) {
@@ -328,18 +329,21 @@ void renderMesh(Simulation& simulation) {
 
         auto t2 = Clock::now();
         tickTime += ms(t2 - t1).count();
-        // ---- Print every 120 frames ----
-        /*if (frame % 1000 == 0) {
-            cout << "Total time:   " << tickTime / 1000.0 << " ms\n";
-            cout << "-----------------------------\n";
+        
+        if (frame % 1000 == 0) {
+            simulation.downloadVoxels();
+            measure.measure(simulation.grid, Settings::X/2, 0, Settings::Z/2, 0, 1, 0);
+            
+            for (int i = 0;i < measure.ZYPlane.size();i++) {
+                cout << measure.ZYPlane[i] << ", ";
+                if (i % 10 == 0) cout << endl;
+            }
 
-            tickTime = 0;
-        }*/
+        }
     }
 
     glfwTerminate();
 }
-// ---------------- MAIN ----------------
 
 int main() {
 
@@ -495,7 +499,7 @@ int main() {
     );*/
 
 
-    // -------- RUN --------
+    // Start loop
     renderMesh(simulation);
 
     return 0;

@@ -30,6 +30,7 @@ public:
 	void dispatchHits(GLuint program);
 
 	std::vector<HitEvent> downloadHits();
+	void downloadVoxels();
 	int getParticleCount();
 	
 private:
