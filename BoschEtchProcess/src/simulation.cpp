@@ -86,6 +86,10 @@ void Simulation::tick(float dt)
     dispatchHits(resolveHitsProgram);
 }
 
+void Simulation::setVoxel(int x, int y, int z, Voxel v) {
+    grid.at(x, y, z) = v;
+}
+
 void Simulation::dispatchRayMarch(GLuint program, int particleCount)
 {
     glUseProgram(program);
@@ -244,7 +248,7 @@ void Simulation::bindBuffers(){
 void Simulation::uploadParticles(int n, bool type, bool deposit,float random) {
 
     constexpr float pi = 3.1415926f;
-    float halfAngle = type ? pi / 10.0f : pi / 2.0f;
+    float halfAngle = type ? pi / 8.0f : pi / 2.0f;
 
     float cosTheta = cos(halfAngle);
     

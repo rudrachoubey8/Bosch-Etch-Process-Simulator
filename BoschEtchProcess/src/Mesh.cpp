@@ -59,7 +59,7 @@ void Mesh::setVoxelBuffer(GLuint ssbo){
 }
 
 void Mesh::initGPU() {
-    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 36;
+    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 6;
 
     // vertex SSBO
     glGenBuffers(1, &vertexSSBO);

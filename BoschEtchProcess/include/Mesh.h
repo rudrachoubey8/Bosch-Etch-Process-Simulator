@@ -26,7 +26,6 @@ private:
     GLuint vertexSSBO = 0;
     GLuint counterSSBO = 0;
     GLuint vao = 0;
-
     GLuint computeProgram = 0;
     GLuint renderProgram = 0;
 

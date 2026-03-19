@@ -10,7 +10,6 @@
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <chrono>
-
 using namespace std;
 // ---------------- RANDOM --------------------------
 namespace Mathf {
@@ -21,6 +20,20 @@ namespace Mathf {
     }
 }
 
+struct Vec3 {
+    float x, y, z;
+
+    Vec3 operator+(const Vec3& v) const { return { x + v.x,y + v.y,z + v.z }; }
+    Vec3 operator-(const Vec3& v) const { return { x - v.x,y - v.y,z - v.z }; }
+    Vec3 operator*(float s) const { return { x * s,y * s,z * s }; }
+};
+
+Vec3 normalize(Vec3 v)
+{
+    float l = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    return { v.x / l,v.y / l,v.z / l };
+};
+
 
 using Clock = std::chrono::high_resolution_clock;
 using ms = std::chrono::duration<double, std::milli>;
@@ -30,9 +43,17 @@ float yaw = 3.14159f / 2.0f;
 float pitch = 0.0f;
 float D = 2.5f;
 
+
 double lastMouseX = 0;
 double lastMouseY = 0;
+
+
+double clickX = 0;
+double clickY = 0;
+bool clicked = false;
+
 bool firstMouse = true;
+bool buttonDown = false;
 
 void mouseCallback(GLFWwindow* window, double xpos, double ypos)
 {
@@ -51,13 +72,31 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos)
 
     float sensitivity = 0.005f;
 
-    yaw += dx * sensitivity;
-    pitch += dy * sensitivity;
-
+    if(buttonDown){
+        yaw += dx * sensitivity;
+        pitch += dy * sensitivity;
+    }
     if (pitch > 1.5f) pitch = 1.5f;
     if (pitch < -1.5f) pitch = -1.5f;
 }
 
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        buttonDown = true;
+    }
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+    {
+        buttonDown = false;
+    }
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+    {
+        glfwGetCursorPos(window, &clickX, &clickY);
+        clicked = true;
+    }
+
+}
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 {
     D -= yoffset * 0.3f;
@@ -65,7 +104,6 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
     if (D < 0.3f) D = 0.3f;
     if (D > 20.0f) D = 20.0f;
 }
-
 
 void renderMesh(Simulation& simulation) {
 
@@ -82,6 +120,7 @@ void renderMesh(Simulation& simulation) {
         glfwCreateWindow(width, height, "Bosch Etch Mesh", nullptr, nullptr);
     if (!window) return;
 
+    glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetCursorPosCallback(window, mouseCallback);
     glfwSetScrollCallback(window, scrollCallback);
 
@@ -165,7 +204,7 @@ void renderMesh(Simulation& simulation) {
 
         if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
             //pause = !pause;
-            simulation.uploadParticles(10000, 0, 1, Mathf::randomFloat(1000));
+            simulation.uploadParticles(10000, 1, 1, Mathf::randomFloat(1000));
         }
         if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
             //pause = !pause;
@@ -175,12 +214,67 @@ void renderMesh(Simulation& simulation) {
             //pause = !pause;
             simulation.uploadParticles(10000, 1, 0, Mathf::randomFloat(1000));
         }
+        if (clicked)
+        {
+            float ndcX = (2.0f * clickX) / width - 1.0f;
+            float ndcY = 1.0f - (2.0f * clickY) / height;
 
+            // camera direction
+            Vec3 forward = {
+                cos(pitch) * sin(yaw),
+                sin(pitch),
+                cos(pitch) * cos(yaw)
+            };
+
+            Vec3 right = {
+                sin(yaw - 3.14159f / 2.0f),
+                0,
+                cos(yaw - 3.14159f / 2.0f)
+            };
+
+            Vec3 up = {
+                right.y * forward.z - right.z * forward.y,
+                right.z * forward.x - right.x * forward.z,
+                right.x * forward.y - right.y * forward.x
+            };
+
+            Vec3 rayDir = normalize(
+                forward +
+                right * ndcX +
+                up * ndcY
+            );
+
+            Vec3 camPos = forward * (-D);
+
+            Vec3 p = camPos;
+
+            for (int i = 0;i < 500;i++)
+            {
+                p = p + rayDir * 0.5f;
+
+                int vx = floor(p.x + Settings::X / 2);
+                int vy = floor(p.y + Settings::Y / 2);
+                int vz = floor(p.z + Settings::Z / 2);
+
+                if (simulation.grid.inBounds(vx, vy, vz))
+                {
+                    Voxel v = simulation.grid.at(vx, vy, vz);
+
+                    if (v.solid)
+                    {
+                        v.type = 4;
+                        cout << "Selected voxel: "
+                            << vx << " "
+                            << vy << " "
+                            << vz << endl;
+                        break;
+                    }
+                }
+            }
+
+            clicked = false;
+        }
         
-        /*if (!pause && frame % 10 == 0) {
-            simulation.uploadParticles(10000, 1, 1, Mathf::randomFloat(1000));
-        }*/
-
         float cy = cos(yaw);
         float sy = sin(yaw);
 
@@ -213,9 +307,11 @@ void renderMesh(Simulation& simulation) {
 
         // ---------------- SIMULATION TIMING ----------------
         auto t1 = Clock::now();
-        if (frame <= 1000 && frame % 10 == 0) {
+        
+        if (frame <= 10000 && frame % 100 == 0) {
             simulation.uploadParticles(100000, 0, 0, Mathf::randomFloat(1000));
         }
+
         simulation.tick(Settings::dt);
 
         // ---------------- MESH UPDATE TIMING ----------------
@@ -233,12 +329,12 @@ void renderMesh(Simulation& simulation) {
         auto t2 = Clock::now();
         tickTime += ms(t2 - t1).count();
         // ---- Print every 120 frames ----
-        if (frame % 1000 == 0) {
+        /*if (frame % 1000 == 0) {
             cout << "Total time:   " << tickTime / 1000.0 << " ms\n";
             cout << "-----------------------------\n";
 
             tickTime = 0;
-        }
+        }*/
     }
 
     glfwTerminate();
@@ -254,7 +350,7 @@ int main() {
         Settings::voxelSize
     );
 
-    Voxel voxel{};
+   Voxel voxel{};
     
     voxel.solid = 1;
     voxel.type = 1;
@@ -268,10 +364,75 @@ int main() {
     mask.threshold = 5000;
     mask.depositThreshold = 5000;
 
-    /*simulation.initRectangle(mask, 20, 5, 0,Settings::X - 20, 10, Settings::Z/3);
-    simulation.initRectangle(mask, 20, 5, 2 * Settings::Z / 3, Settings::X - 20, 10, Settings::Z);*/
-    simulation.initRectangle(voxel, 0,5,0,Settings::X, Settings::Y, Settings::Z);
+    simulation.initRectangle(mask, 0, 5, 0,Settings::X, 10, Settings::Z/3);
+    simulation.initRectangle(mask, 0, 5, 2 * Settings::Z / 3, Settings::X, 10, Settings::Z);
+    simulation.initRectangle(voxel, 0,10,0,Settings::X, Settings::Y, Settings::Z);
 
+    //Voxel low{};
+    //low.solid = 1;
+    //low.type = 1;
+    //low.threshold = 100;
+    //low.depositThreshold = 10;
+
+    //Voxel high{};
+    //high.solid = 1;
+    //high.type = 3;
+    //high.threshold = 5000;
+    //high.depositThreshold = 5000;
+
+    //int gradientWidth = 6;
+    //int coverThickness = 4;   // wall thickness
+
+    //for (int x = 0; x < Settings::X; x++) {
+    //    for (int y = 0; y < Settings::Y - 5; y++) {
+    //        for (int z = 0; z < Settings::Z; z++) {
+
+    //            Voxel v;
+
+    //            // shell but OPEN TOP
+    //            if (
+    //                x < coverThickness || x >= Settings::X - coverThickness ||
+    //                z < coverThickness || z >= Settings::Z - coverThickness ||
+    //                y >= Settings::Y - coverThickness   // top wall
+    //                )
+    //            {
+    //                v = high;
+    //            }
+    //            else {
+
+    //                float region = (float)z / Settings::Z;
+
+    //                bool lowRegion =
+    //                    (region < 0.2f) ||
+    //                    (region > 0.4f && region < 0.6f) ||
+    //                    (region > 0.8f);
+
+    //                if (lowRegion) v = low;
+    //                else v = high;
+
+    //                int distToBoundary =
+    //                    std::min({ abs(z - Settings::Z / 5),
+    //                               abs(z - 2 * Settings::Z / 5),
+    //                               abs(z - 3 * Settings::Z / 5),
+    //                               abs(z - 4 * Settings::Z / 5) });
+
+    //                if (distToBoundary < gradientWidth) {
+    //                    float t = (float)distToBoundary / gradientWidth;
+
+    //                    int lowT = low.threshold;
+    //                    int highT = high.threshold;
+
+    //                    if (v.type == 1)
+    //                        v.threshold = lowT + (highT - lowT) * (1.0f - t);
+    //                    else
+    //                        v.threshold = highT - (highT - lowT) * (1.0f - t);
+    //                }
+    //            }
+
+    //            simulation.setVoxel(x, y + 5, z, v);
+    //        }
+    //    }
+    //}
     /*
 
     simulation.initRectangle(
