@@ -29,10 +29,21 @@ uniform float X;
 uniform float Z;
 uniform float seed;
 
-float rand(float n)
+uint hash(uint x)
 {
-    return fract(sin(n) * 43758.5453123);
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
 }
+
+float rand01(uint x)
+{
+    return float(hash(x)) / 4294967296.0;
+}
+
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
@@ -42,8 +53,8 @@ void main()
 
     uint index = startIndex + id;
 
-    float u = rand(id + seed);
-    float v = rand(id * 2.0 + seed);
+    float u = rand01(id + uint(seed));
+    float v = rand01(id * 2 + uint(seed));
 
     float y = cosTheta + u * (1.0 - cosTheta);
     float phi = 6.28318530718 * v;
@@ -58,9 +69,9 @@ void main()
     particles[index].dy = y;
     particles[index].dz = r * sin(phi);
 
-    particles[index].x = X / 3 + rand(id * 3.0 + seed) * X / 3;
+    particles[index].x = X / 3 + rand01(id * 3 + uint(seed)) * X / 3;
     particles[index].y = 1.0;
-    particles[index].z = Z / 3 + rand(id * 4.0 + seed) * Z / 3;
+    particles[index].z = Z / 3 + rand01(id * 4 + uint(seed)) * Z / 3;
     if(id == 0)
     {
         atomicAdd(finalParticlesCount, particleCount);

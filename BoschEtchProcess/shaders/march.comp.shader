@@ -134,7 +134,7 @@ void main()
             else
                 normal = ivec3(0,0,-stepDir.z);
 
-            float damage = 10.0;
+            float damage = p.energy;
 
             uint writeIdx = atomicAdd(hitCount,1u);
 

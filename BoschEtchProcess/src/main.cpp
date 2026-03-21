@@ -241,7 +241,7 @@ void renderMesh(Simulation& simulation) {
 
         auto t1 = Clock::now();
         
-        if (frame <= 10000 && frame % 100 == 0) {
+        if (frame <= 1000 && frame % 10 == 0) {
             simulation.uploadParticles(100000, 0, 0, Mathf::randomFloat(1000));
         }
 
@@ -260,7 +260,7 @@ void renderMesh(Simulation& simulation) {
         auto t2 = Clock::now();
         tickTime += ms(t2 - t1).count();
         
-        if (frame % 1000 == 0) {
+        if (frame % 10000 == 0) {
             simulation.downloadVoxels();
             measure.measure(simulation.grid, Settings::X/2, 0, Settings::Z/2, 0, 1, 0);
             
