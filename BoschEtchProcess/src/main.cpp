@@ -47,11 +47,6 @@ float D = 2.5f;
 double lastMouseX = 0;
 double lastMouseY = 0;
 
-
-double clickX = 0;
-double clickY = 0;
-bool clicked = false;
-
 bool firstMouse = true;
 bool buttonDown = false;
 
@@ -92,12 +87,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
     {
         buttonDown = false;
     }
-    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
-    {
-        glfwGetCursorPos(window, &clickX, &clickY);
-        clicked = true;
-    }
-
+    
 }
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 {
@@ -218,66 +208,6 @@ void renderMesh(Simulation& simulation) {
             //pause = !pause;
             simulation.uploadParticles(10000, 1, 0, Mathf::randomFloat(1000));
         }
-        if (clicked)
-        {
-            float ndcX = (2.0f * clickX) / width - 1.0f;
-            float ndcY = 1.0f - (2.0f * clickY) / height;
-
-            // camera direction
-            Vec3 forward = {
-                cos(pitch) * sin(yaw),
-                sin(pitch),
-                cos(pitch) * cos(yaw)
-            };
-
-            Vec3 right = {
-                sin(yaw - 3.14159f / 2.0f),
-                0,
-                cos(yaw - 3.14159f / 2.0f)
-            };
-
-            Vec3 up = {
-                right.y * forward.z - right.z * forward.y,
-                right.z * forward.x - right.x * forward.z,
-                right.x * forward.y - right.y * forward.x
-            };
-
-            Vec3 rayDir = normalize(
-                forward +
-                right * ndcX +
-                up * ndcY
-            );
-
-            Vec3 camPos = forward * (-D);
-
-            Vec3 p = camPos;
-
-            for (int i = 0;i < 500;i++)
-            {
-                p = p + rayDir * 0.5f;
-
-                int vx = floor(p.x + Settings::X / 2);
-                int vy = floor(p.y + Settings::Y / 2);
-                int vz = floor(p.z + Settings::Z / 2);
-
-                if (simulation.grid.inBounds(vx, vy, vz))
-                {
-                    Voxel v = simulation.grid.at(vx, vy, vz);
-
-                    if (v.solid)
-                    {
-                        v.type = 4;
-                        cout << "Selected voxel: "
-                            << vx << " "
-                            << vy << " "
-                            << vz << endl;
-                        break;
-                    }
-                }
-            }
-
-            clicked = false;
-        }
         
         float cy = cos(yaw);
         float sy = sin(yaw);
@@ -311,7 +241,7 @@ void renderMesh(Simulation& simulation) {
 
         auto t1 = Clock::now();
         
-        if (frame <= 1000 && frame % 10 == 0) {
+        if (frame <= 10000 && frame % 100 == 0) {
             simulation.uploadParticles(100000, 0, 0, Mathf::randomFloat(1000));
         }
 
@@ -368,8 +298,8 @@ int main() {
     mask.threshold = 5000;
     mask.depositThreshold = 5000;
 
-    simulation.initRectangle(mask, 0, 5, 0,Settings::X, 10, Settings::Z/3);
-    simulation.initRectangle(mask, 0, 5, 2 * Settings::Z / 3, Settings::X, 10, Settings::Z);
+    //simulation.initRectangle(mask, 0, 5, 0,Settings::X, 10, Settings::Z/3);
+    //simulation.initRectangle(mask, 0, 5, 2 * Settings::Z / 3, Settings::X, 10, Settings::Z);
     simulation.initRectangle(voxel, 0,10,0,Settings::X, Settings::Y, Settings::Z);
 
     //Voxel low{};

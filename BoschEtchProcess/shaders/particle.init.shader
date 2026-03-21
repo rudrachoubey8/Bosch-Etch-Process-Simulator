@@ -58,9 +58,9 @@ void main()
     particles[index].dy = y;
     particles[index].dz = r * sin(phi);
 
-    particles[index].x = rand(id * 3.0 + seed) * X;
+    particles[index].x = X / 3 + rand(id * 3.0 + seed) * X / 3;
     particles[index].y = 1.0;
-    particles[index].z = rand(id * 4.0 + seed) * Z;
+    particles[index].z = Z / 3 + rand(id * 4.0 + seed) * Z / 3;
     if(id == 0)
     {
         atomicAdd(finalParticlesCount, particleCount);
