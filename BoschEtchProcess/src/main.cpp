@@ -6,11 +6,16 @@
 #include "simulation.h"
 #include "settings.h"
 #include "Mesh.h"
-
 #include "Measurments.h"
+
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <chrono>
+
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 using namespace std;
 // ---------------- RANDOM --------------------------
 namespace Mathf {
@@ -42,7 +47,6 @@ using ms = std::chrono::duration<double, std::milli>;
 float yaw = 3.14159f / 2.0f;
 float pitch = 0.0f;
 float D = 2.5f;
-
 
 double lastMouseX = 0;
 double lastMouseY = 0;
@@ -178,7 +182,6 @@ void renderMesh(Simulation& simulation) {
     simulation.createBuffers();
     simulation.uploadVoxels(simulation.grid.voxels);
 
-
     mesh.initGPU();
     mesh.setVoxelBuffer(simulation.voxelSSBO);
     mesh.buildMesh();
@@ -187,28 +190,41 @@ void renderMesh(Simulation& simulation) {
     double tickTime = 0;
 
     bool pause = false;
+    bool draw = false;
 
     // Initialize Measurment function
     Measure measure;
+    
+    float duration = 3000;
+    int waitTime = 10;
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Style (optional but makes it look less 2002)
+    ImGui::StyleColorsDark();
+
+    // Backend init
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 430");
     while (!glfwWindowShouldClose(window)) {
 
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::Begin("Simulation Controls");
+
+        ImGui::SliderFloat("Duration", &duration, 0, 10000);
+        ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
+        ImGui::Checkbox("Pause", &pause);
+        ImGui::Checkbox("Draw", &draw);
+
+        ImGui::End();
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
-            //pause = !pause;
-            simulation.uploadParticles(10000, 1, 1, Mathf::randomFloat(1000));
-        }
-        if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
-            //pause = !pause;
-            simulation.uploadParticles(10000, 0, 0, Mathf::randomFloat(1000));
-        }
-        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
-            //pause = !pause;
-            simulation.uploadParticles(10000, 1, 0, Mathf::randomFloat(1000));
-        }
-        
         float cy = cos(yaw);
         float sy = sin(yaw);
 
@@ -241,18 +257,24 @@ void renderMesh(Simulation& simulation) {
 
         auto t1 = Clock::now();
         
-        if (frame <= 1000 && frame % 10 == 0) {
-            simulation.uploadParticles(100000, 0, 0, Mathf::randomFloat(1000));
+        if (frame <= duration && frame % waitTime == 0) {
+            simulation.uploadParticles(1e4, 0, 0, Mathf::randomFloat(1000));
+        }
+        if (!pause) {
+            simulation.tick(Settings::dt);
+            frame++;
+            if (draw && frame % 10 == 0) {
+                mesh.buildMesh();
+            }
+
         }
 
-        simulation.tick(Settings::dt);
-        frame++;
-
-        if (frame % 10 == 0) {
-            mesh.buildMesh();
+        if (draw) {
+            mesh.draw();
         }
 
-        mesh.draw();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -260,18 +282,29 @@ void renderMesh(Simulation& simulation) {
         auto t2 = Clock::now();
         tickTime += ms(t2 - t1).count();
         
-        if (frame % 10000 == 0) {
+        if (frame == duration + 1) {
+            cout << tickTime / (duration + 1);
+
             simulation.downloadVoxels();
             measure.measure(simulation.grid, Settings::X/2, 0, Settings::Z/2, 0, 1, 0);
             
             for (int i = 0;i < measure.ZYPlane.size();i++) {
-                cout << measure.ZYPlane[i] << ", ";
                 if (i % 10 == 0) cout << endl;
+                cout << measure.ZYPlane[i] << ", ";
             }
+            
+            std::vector<float> conv = measure.convolve(measure.ZYPlane, 5);
+            int depth = measure.getDepth(conv);
 
+            cout << endl;
+            cout << "Depth: " << depth;
+            cout << endl;
+            cout << "Width: " << measure.getWidth(conv, depth / 2);
         }
     }
-
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
     glfwTerminate();
 }
 

@@ -2,6 +2,8 @@
     "name": "bosch-etch-sim",
     "version": "0.1.0",
     "dependencies": [
-        "glfw3"
-    ]
+        "glfw3",
+        "imgui"
+    ],
+    "builtin-baseline": "dbbd673624c057174dd51ef85758951032717715"
 }

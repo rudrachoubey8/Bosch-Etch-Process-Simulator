@@ -2204,8 +2204,8 @@ events:
     checks:
       - "Detecting C compiler ABI info"
     directories:
-      source: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-2wi5am"
-      binary: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-2wi5am"
+      source: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-ru44yx"
+      binary: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-ru44yx"
     cmakeVariables:
       CMAKE_C_FLAGS: " /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP "
       CMAKE_C_FLAGS_DEBUG: "/D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1 "
@@ -2221,11 +2221,11 @@ events:
       variable: "CMAKE_C_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-2wi5am'
+        Change Dir: 'C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-ru44yx'
         
-        Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" -v cmTC_336fd
-        [1/2] C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP   /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_336fd.dir\\CMakeCCompilerABI.c.obj /FdCMakeFiles\\cmTC_336fd.dir\\ /FS -c "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCCompilerABI.c"
-        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_336fd.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_336fd.dir\\CMakeCCompilerABI.c.obj  /out:cmTC_336fd.exe /implib:cmTC_336fd.lib /pdb:cmTC_336fd.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
+        Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" -v cmTC_ec1a3
+        [1/2] C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP   /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_ec1a3.dir\\CMakeCCompilerABI.c.obj /FdCMakeFiles\\cmTC_ec1a3.dir\\ /FS -c "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCCompilerABI.c"
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_ec1a3.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_ec1a3.dir\\CMakeCCompilerABI.c.obj  /out:cmTC_ec1a3.exe /implib:cmTC_ec1a3.lib /pdb:cmTC_ec1a3.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
         
       exitCode: 0
   -
@@ -2268,8 +2268,8 @@ events:
     checks:
       - "Performing Test CMAKE_HAVE_LIBC_PTHREAD"
     directories:
-      source: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-94bwrc"
-      binary: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-94bwrc"
+      source: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-jtxsfd"
+      binary: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-jtxsfd"
     cmakeVariables:
       CMAKE_C_FLAGS: " /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP "
       CMAKE_C_FLAGS_DEBUG: "/D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1 "
@@ -2286,13 +2286,13 @@ events:
       variable: "CMAKE_HAVE_LIBC_PTHREAD"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-94bwrc'
+        Change Dir: 'C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-jtxsfd'
         
-        Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" -v cmTC_49d12
-        [1/2] C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -DCMAKE_HAVE_LIBC_PTHREAD -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP   /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_49d12.dir\\src.c.obj /FdCMakeFiles\\cmTC_49d12.dir\\ /FS -c C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-94bwrc\\src.c
-        FAILED: CMakeFiles/cmTC_49d12.dir/src.c.obj 
-        C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -DCMAKE_HAVE_LIBC_PTHREAD -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP   /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_49d12.dir\\src.c.obj /FdCMakeFiles\\cmTC_49d12.dir\\ /FS -c C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-94bwrc\\src.c
-        C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-94bwrc\\src.c(1): fatal error C1083: Cannot open include file: 'pthread.h': No such file or directory
+        Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" -v cmTC_cdf21
+        [1/2] C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -DCMAKE_HAVE_LIBC_PTHREAD -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP   /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_cdf21.dir\\src.c.obj /FdCMakeFiles\\cmTC_cdf21.dir\\ /FS -c C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-jtxsfd\\src.c
+        FAILED: CMakeFiles/cmTC_cdf21.dir/src.c.obj 
+        C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -DCMAKE_HAVE_LIBC_PTHREAD -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP   /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_cdf21.dir\\src.c.obj /FdCMakeFiles\\cmTC_cdf21.dir\\ /FS -c C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-jtxsfd\\src.c
+        C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-jtxsfd\\src.c(1): fatal error C1083: Cannot open include file: 'pthread.h': No such file or directory
         ninja: build stopped: subcommand failed.
         
       exitCode: 1
@@ -2307,8 +2307,8 @@ events:
     checks:
       - "Looking for pthread_create in pthreads"
     directories:
-      source: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-b3a0q0"
-      binary: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-b3a0q0"
+      source: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-ruj3og"
+      binary: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-ruj3og"
     cmakeVariables:
       CMAKE_C_FLAGS: " /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP "
       CMAKE_C_FLAGS_DEBUG: "/D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1 "
@@ -2325,14 +2325,14 @@ events:
       variable: "CMAKE_HAVE_PTHREADS_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-b3a0q0'
+        Change Dir: 'C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-ruj3og'
         
-        Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" -v cmTC_a58bc
-        [1/2] C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP  -DCHECK_FUNCTION_EXISTS=pthread_create /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_a58bc.dir\\CheckFunctionExists.c.obj /FdCMakeFiles\\cmTC_a58bc.dir\\ /FS -c C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-b3a0q0\\CheckFunctionExists.c
-        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_a58bc.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_a58bc.dir\\CheckFunctionExists.c.obj  /out:cmTC_a58bc.exe /implib:cmTC_a58bc.lib /pdb:cmTC_a58bc.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  pthreads.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
-        FAILED: cmTC_a58bc.exe 
-        C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_a58bc.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_a58bc.dir\\CheckFunctionExists.c.obj  /out:cmTC_a58bc.exe /implib:cmTC_a58bc.lib /pdb:cmTC_a58bc.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  pthreads.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
-        LINK Pass 1: command "C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_a58bc.dir\\CheckFunctionExists.c.obj /out:cmTC_a58bc.exe /implib:cmTC_a58bc.lib /pdb:cmTC_a58bc.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTFILE:CMakeFiles\\cmTC_a58bc.dir/intermediate.manifest CMakeFiles\\cmTC_a58bc.dir/manifest.res" failed (exit code 1104) with the following output:\x0d
+        Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" -v cmTC_1775a
+        [1/2] C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP  -DCHECK_FUNCTION_EXISTS=pthread_create /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_1775a.dir\\CheckFunctionExists.c.obj /FdCMakeFiles\\cmTC_1775a.dir\\ /FS -c C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-ruj3og\\CheckFunctionExists.c
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_1775a.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_1775a.dir\\CheckFunctionExists.c.obj  /out:cmTC_1775a.exe /implib:cmTC_1775a.lib /pdb:cmTC_1775a.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  pthreads.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
+        FAILED: cmTC_1775a.exe 
+        C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_1775a.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_1775a.dir\\CheckFunctionExists.c.obj  /out:cmTC_1775a.exe /implib:cmTC_1775a.lib /pdb:cmTC_1775a.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  pthreads.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
+        LINK Pass 1: command "C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_1775a.dir\\CheckFunctionExists.c.obj /out:cmTC_1775a.exe /implib:cmTC_1775a.lib /pdb:cmTC_1775a.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTFILE:CMakeFiles\\cmTC_1775a.dir/intermediate.manifest CMakeFiles\\cmTC_1775a.dir/manifest.res" failed (exit code 1104) with the following output:\x0d
         LINK : fatal error LNK1104: cannot open file 'pthreads.lib'\x0d\x0d
         ninja: build stopped: subcommand failed.
         
@@ -2348,8 +2348,8 @@ events:
     checks:
       - "Looking for pthread_create in pthread"
     directories:
-      source: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-38ktsc"
-      binary: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-38ktsc"
+      source: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-ew8fug"
+      binary: "C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-ew8fug"
     cmakeVariables:
       CMAKE_C_FLAGS: " /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP "
       CMAKE_C_FLAGS_DEBUG: "/D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1 "
@@ -2366,14 +2366,14 @@ events:
       variable: "CMAKE_HAVE_PTHREAD_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-38ktsc'
+        Change Dir: 'C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-ew8fug'
         
-        Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" -v cmTC_7cf05
-        [1/2] C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP  -DCHECK_FUNCTION_EXISTS=pthread_create /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_7cf05.dir\\CheckFunctionExists.c.obj /FdCMakeFiles\\cmTC_7cf05.dir\\ /FS -c C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-38ktsc\\CheckFunctionExists.c
-        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_7cf05.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_7cf05.dir\\CheckFunctionExists.c.obj  /out:cmTC_7cf05.exe /implib:cmTC_7cf05.lib /pdb:cmTC_7cf05.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  pthread.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
-        FAILED: cmTC_7cf05.exe 
-        C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_7cf05.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_7cf05.dir\\CheckFunctionExists.c.obj  /out:cmTC_7cf05.exe /implib:cmTC_7cf05.lib /pdb:cmTC_7cf05.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  pthread.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
-        LINK Pass 1: command "C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_7cf05.dir\\CheckFunctionExists.c.obj /out:cmTC_7cf05.exe /implib:cmTC_7cf05.lib /pdb:cmTC_7cf05.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTFILE:CMakeFiles\\cmTC_7cf05.dir/intermediate.manifest CMakeFiles\\cmTC_7cf05.dir/manifest.res" failed (exit code 1104) with the following output:\x0d
+        Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" -v cmTC_6511d
+        [1/2] C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo -D_MBCS  /nologo /DWIN32 /D_WINDOWS /W3 /utf-8 /MP  -DCHECK_FUNCTION_EXISTS=pthread_create /D_DEBUG /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_6511d.dir\\CheckFunctionExists.c.obj /FdCMakeFiles\\cmTC_6511d.dir\\ /FS -c C:\\Users\\rudra\\source\\repos\\BoschEtchProcess\\BoschEtchProcess\\vcpkg_installed\\vcpkg\\blds\\glfw3\\x64-windows-rel\\CMakeFiles\\CMakeScratch\\TryCompile-ew8fug\\CheckFunctionExists.c
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_6511d.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_6511d.dir\\CheckFunctionExists.c.obj  /out:cmTC_6511d.exe /implib:cmTC_6511d.lib /pdb:cmTC_6511d.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  pthread.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
+        FAILED: cmTC_6511d.exe 
+        C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1943 --intdir=CMakeFiles\\cmTC_6511d.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100226~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_6511d.dir\\CheckFunctionExists.c.obj  /out:cmTC_6511d.exe /implib:cmTC_6511d.lib /pdb:cmTC_6511d.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console  pthread.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
+        LINK Pass 1: command "C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_6511d.dir\\CheckFunctionExists.c.obj /out:cmTC_6511d.exe /implib:cmTC_6511d.lib /pdb:cmTC_6511d.pdb /version:0.0 /machine:x64 /debug /INCREMENTAL /subsystem:console pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTFILE:CMakeFiles\\cmTC_6511d.dir/intermediate.manifest CMakeFiles\\cmTC_6511d.dir/manifest.res" failed (exit code 1104) with the following output:\x0d
         LINK : fatal error LNK1104: cannot open file 'pthread.lib'\x0d\x0d
         ninja: build stopped: subcommand failed.
         

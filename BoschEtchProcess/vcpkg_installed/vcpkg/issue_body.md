@@ -16,6 +16,7 @@ Package: glfw3:x64-windows@3.4#1
 
 ```
 -- Using cached glfw-glfw-3.4.tar.gz.
+-- Cleaning sources at C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/src/3.4-2448ff4533.clean. Use --editable to skip cleaning for the packages you specify.
 -- Extracting source C:/Users/rudra/AppData/Local/vcpkg/downloads/glfw-glfw-3.4.tar.gz
 -- Using source at C:/Users/rudra/source/repos/BoschEtchProcess/BoschEtchProcess/vcpkg_installed/vcpkg/blds/glfw3/src/3.4-2448ff4533.clean
 CMake Warning (dev) at scripts/cmake/vcpkg_find_acquire_program.cmake:70 (cmake_parse_arguments):
@@ -60,19 +61,13 @@ This warning is for project developers.  Use -Wno-dev to suppress it.
 Downloading https://mirror.msys2.org/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst
 Downloading https://repo.msys2.org/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst
 Downloading https://mirror.yandex.ru/mirrors/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst
-warning: Download failed -- retrying after 1000ms
-warning: Download failed -- retrying after 2000ms
-warning: Download failed -- retrying after 4000ms
 Downloading https://mirrors.tuna.tsinghua.edu.cn/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst
 Downloading https://mirrors.ustc.edu.cn/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst
 Downloading https://mirror.selfnet.de/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst
 error: Failed to download from mirror set
 error: https://mirror.msys2.org/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: failed: status code 404
 error: https://repo.msys2.org/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: failed: status code 404
-error: https://mirror.yandex.ru/mirrors/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: WinHttpSendRequest failed with exit code 12030
-error: https://mirror.yandex.ru/mirrors/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: WinHttpSendRequest failed with exit code 12030
-error: https://mirror.yandex.ru/mirrors/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: WinHttpSendRequest failed with exit code 12030
-error: https://mirror.yandex.ru/mirrors/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: WinHttpSendRequest failed with exit code 12030
+error: https://mirror.yandex.ru/mirrors/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: failed: status code 404
 error: https://mirrors.tuna.tsinghua.edu.cn/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: failed: status code 404
 error: https://mirrors.ustc.edu.cn/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: failed: status code 404
 error: https://mirror.selfnet.de/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64.pkg.tar.zst: failed: status code 404
@@ -80,9 +75,9 @@ error: https://mirror.selfnet.de/msys2/msys/x86_64/msys2-runtime-3.4.10-4-x86_64
 [DEBUG] Time in subprocesses: 0us
 [DEBUG] Time in parsing JSON: 13us
 [DEBUG] Time in JSON reader: 0us
-[DEBUG] Time in filesystem: 4276us
+[DEBUG] Time in filesystem: 6179us
 [DEBUG] Time in loading ports: 0us
-[DEBUG] Exiting after 13 s (13158754us)
+[DEBUG] Exiting after 6 s (6027421us)
 
 CMake Error at scripts/cmake/vcpkg_download_distfile.cmake:32 (message):
       
@@ -129,10 +124,11 @@ Call Stack (most recent call first):
 {
   "name": "bosch-etch-sim",
   "version": "0.1.0",
-  "builtin-baseline": "389d14fa0e0692f36967e9eb5499e909317644d5",
   "dependencies": [
-    "glfw3"
-  ]
+    "glfw3",
+    "imgui"
+  ],
+  "builtin-baseline": "dbbd673624c057174dd51ef85758951032717715"
 }
 
 ```
