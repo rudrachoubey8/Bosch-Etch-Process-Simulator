@@ -220,6 +220,13 @@ void renderMesh(Simulation& simulation) {
         ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
+        if(ImGui::Button("Reset")) {
+            frame = 0;
+            simulation.uploadVoxels(simulation.grid.voxels);
+            mesh.initGPU();
+            mesh.setVoxelBuffer(simulation.voxelSSBO);
+            mesh.buildMesh();
+        }
 
         ImGui::End();
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
@@ -255,18 +262,19 @@ void renderMesh(Simulation& simulation) {
             1, GL_TRUE, Size
         );
 
-        auto t1 = Clock::now();
         
-        if (frame <= duration && frame % waitTime == 0) {
-            simulation.uploadParticles(1e4, 0, 0, Mathf::randomFloat(1000));
-        }
         if (!pause) {
+            auto t1 = Clock::now();
+            if (frame <= duration && frame % waitTime == 0) {
+                simulation.uploadParticles(1e4, 0, 0, Mathf::randomFloat(1000));
+            }
             simulation.tick(Settings::dt);
             frame++;
             if (draw && frame % 10 == 0) {
                 mesh.buildMesh();
             }
-
+            auto t2 = Clock::now();
+            tickTime += ms(t2 - t1).count();
         }
 
         if (draw) {
@@ -278,9 +286,6 @@ void renderMesh(Simulation& simulation) {
 
         glfwSwapBuffers(window);
         glfwPollEvents();
-
-        auto t2 = Clock::now();
-        tickTime += ms(t2 - t1).count();
         
         if (frame == duration + 1) {
             cout << tickTime / (duration + 1);
@@ -306,7 +311,9 @@ void renderMesh(Simulation& simulation) {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
     glfwTerminate();
+
 }
+
 
 int main() {
 
@@ -330,137 +337,7 @@ int main() {
     mask.type = 3;
     mask.threshold = 5000;
     mask.depositThreshold = 5000;
-
-    //simulation.initRectangle(mask, 0, 5, 0,Settings::X, 10, Settings::Z/3);
-    //simulation.initRectangle(mask, 0, 5, 2 * Settings::Z / 3, Settings::X, 10, Settings::Z);
     simulation.initRectangle(voxel, 0,10,0,Settings::X, Settings::Y, Settings::Z);
-
-    //Voxel low{};
-    //low.solid = 1;
-    //low.type = 1;
-    //low.threshold = 100;
-    //low.depositThreshold = 10;
-
-    //Voxel high{};
-    //high.solid = 1;
-    //high.type = 3;
-    //high.threshold = 5000;
-    //high.depositThreshold = 5000;
-
-    //int gradientWidth = 6;
-    //int coverThickness = 4;   // wall thickness
-
-    //for (int x = 0; x < Settings::X; x++) {
-    //    for (int y = 0; y < Settings::Y - 5; y++) {
-    //        for (int z = 0; z < Settings::Z; z++) {
-
-    //            Voxel v;
-
-    //            // shell but OPEN TOP
-    //            if (
-    //                x < coverThickness || x >= Settings::X - coverThickness ||
-    //                z < coverThickness || z >= Settings::Z - coverThickness ||
-    //                y >= Settings::Y - coverThickness   // top wall
-    //                )
-    //            {
-    //                v = high;
-    //            }
-    //            else {
-
-    //                float region = (float)z / Settings::Z;
-
-    //                bool lowRegion =
-    //                    (region < 0.2f) ||
-    //                    (region > 0.4f && region < 0.6f) ||
-    //                    (region > 0.8f);
-
-    //                if (lowRegion) v = low;
-    //                else v = high;
-
-    //                int distToBoundary =
-    //                    std::min({ abs(z - Settings::Z / 5),
-    //                               abs(z - 2 * Settings::Z / 5),
-    //                               abs(z - 3 * Settings::Z / 5),
-    //                               abs(z - 4 * Settings::Z / 5) });
-
-    //                if (distToBoundary < gradientWidth) {
-    //                    float t = (float)distToBoundary / gradientWidth;
-
-    //                    int lowT = low.threshold;
-    //                    int highT = high.threshold;
-
-    //                    if (v.type == 1)
-    //                        v.threshold = lowT + (highT - lowT) * (1.0f - t);
-    //                    else
-    //                        v.threshold = highT - (highT - lowT) * (1.0f - t);
-    //                }
-    //            }
-
-    //            simulation.setVoxel(x, y + 5, z, v);
-    //        }
-    //    }
-    //}
-    /*
-
-    simulation.initRectangle(
-        mask,
-        0, 5, 0,
-        20, 10, 20
-    );
-    simulation.initRectangle(
-        mask,
-        0, 5, 40,
-        20, 10, 60
-    );
-
-    simulation.initRectangle(
-        mask,
-        0, 5, 80,
-        20, 10, 99
-    );
-
-    simulation.initRectangle(
-        mask,
-        0, 10, 0,
-        20, 20, 100
-    );
-
-    simulation.initRectangle(
-        voxel,
-        0, 5, 20,
-        20, 10, 40
-    );
-
-    simulation.initRectangle(
-        voxel,
-        0, 5, 60,
-        20, 10, 80
-    );
-
-    simulation.initRectangle(
-        mask,
-        0, 10, 100,
-        20, 20, 120
-    );
-
-    simulation.initRectangle(
-        voxel,
-        0, 5, 99,
-        20, 10, 120
-    );
-
-    simulation.initRectangle(
-        mask,
-        0, 5, 120,
-        20, 20, 140
-    );
-
-    simulation.initRectangle(
-        mask,
-        0, 5, 80,
-        20, 10, 100
-    );*/
-
 
     // Start loop
     renderMesh(simulation);
