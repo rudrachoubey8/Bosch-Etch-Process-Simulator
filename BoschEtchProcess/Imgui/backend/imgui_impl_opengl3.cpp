@@ -127,6 +127,7 @@
 #include "imgui_impl_opengl3.h"
 #include <stdio.h>
 #include <stdint.h>     // intptr_t
+#include <glad/glad.h>
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif

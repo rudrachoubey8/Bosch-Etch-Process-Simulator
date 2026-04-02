@@ -101,6 +101,25 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
     if (D > 20.0f) D = 20.0f;
 }
 
+void initializeGrid(Simulation& simulation) {
+    Voxel voxel{};
+
+    voxel.solid = 1;
+    voxel.type = 1;
+    voxel.threshold = 100;
+    voxel.depositThreshold = 10;
+
+    Voxel mask{};
+
+    mask.solid = 1;
+    mask.type = 3;
+    mask.threshold = 5000;
+    mask.depositThreshold = 5000;
+    simulation.initRectangle(voxel, 0, 10, 0, Settings::X, Settings::Y, Settings::Z);
+
+}
+
+
 void renderMesh(Simulation& simulation) {
 
     if (!glfwInit()) return;
@@ -189,8 +208,8 @@ void renderMesh(Simulation& simulation) {
     int frame = 0;
     double tickTime = 0;
 
-    bool pause = false;
-    bool draw = false;
+    bool pause = 1;
+    bool draw = 1;
 
     // Initialize Measurment function
     Measure measure;
@@ -208,6 +227,7 @@ void renderMesh(Simulation& simulation) {
     // Backend init
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 430");
+    
     while (!glfwWindowShouldClose(window)) {
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -222,7 +242,10 @@ void renderMesh(Simulation& simulation) {
         ImGui::Checkbox("Draw", &draw);
         if(ImGui::Button("Reset")) {
             frame = 0;
+
+            initializeGrid(simulation);
             simulation.uploadVoxels(simulation.grid.voxels);
+
             mesh.initGPU();
             mesh.setVoxelBuffer(simulation.voxelSSBO);
             mesh.buildMesh();
@@ -270,14 +293,14 @@ void renderMesh(Simulation& simulation) {
             }
             simulation.tick(Settings::dt);
             frame++;
-            if (draw && frame % 10 == 0) {
-                mesh.buildMesh();
-            }
             auto t2 = Clock::now();
             tickTime += ms(t2 - t1).count();
         }
 
         if (draw) {
+            if (frame % 10 == 0) {
+                mesh.buildMesh();
+            }
             mesh.draw();
         }
 
@@ -314,7 +337,6 @@ void renderMesh(Simulation& simulation) {
 
 }
 
-
 int main() {
 
     Simulation simulation(
@@ -324,21 +346,7 @@ int main() {
         Settings::voxelSize
     );
 
-   Voxel voxel{};
-    
-    voxel.solid = 1;
-    voxel.type = 1;
-    voxel.threshold = 100;
-    voxel.depositThreshold = 10;
-
-    Voxel mask{};
-
-    mask.solid = 1;
-    mask.type = 3;
-    mask.threshold = 5000;
-    mask.depositThreshold = 5000;
-    simulation.initRectangle(voxel, 0,10,0,Settings::X, Settings::Y, Settings::Z);
-
+    initializeGrid(simulation);
     // Start loop
     renderMesh(simulation);
 
