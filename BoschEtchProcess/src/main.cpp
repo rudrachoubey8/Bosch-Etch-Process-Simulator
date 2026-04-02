@@ -214,7 +214,7 @@ void renderMesh(Simulation& simulation) {
     // Initialize Measurment function
     Measure measure;
     
-    float duration = 3000;
+    int duration = 3000;
     int waitTime = 10;
 
     IMGUI_CHECKVERSION();
@@ -236,7 +236,7 @@ void renderMesh(Simulation& simulation) {
 
         ImGui::Begin("Simulation Controls");
 
-        ImGui::SliderFloat("Duration", &duration, 0, 10000);
+        ImGui::SliderInt("Duration", &duration, 0, 10000);
         ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
