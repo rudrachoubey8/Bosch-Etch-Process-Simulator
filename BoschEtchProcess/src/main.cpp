@@ -206,16 +206,22 @@ void renderMesh(Simulation& simulation) {
     mesh.buildMesh();
 
     int frame = 0;
+    int count = 1e4;
     double tickTime = 0;
 
     bool pause = 1;
     bool draw = 1;
+    bool deposit = 0;
+    bool ion = 0;
+    
 
     // Initialize Measurment function
     Measure measure;
     
     int duration = 3000;
     int waitTime = 10;
+
+
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -238,10 +244,17 @@ void renderMesh(Simulation& simulation) {
 
         ImGui::SliderInt("Duration", &duration, 0, 10000);
         ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
+        ImGui::SliderInt("Particle Count", &count, 0, 1e6);
+
+
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
+        ImGui::Checkbox("Ion", &ion);
+        ImGui::Checkbox("Deposit", &deposit);
+
         if(ImGui::Button("Reset")) {
             frame = 0;
+            tickTime = 0;
 
             initializeGrid(simulation);
             simulation.uploadVoxels(simulation.grid.voxels);
@@ -289,7 +302,7 @@ void renderMesh(Simulation& simulation) {
         if (!pause) {
             auto t1 = Clock::now();
             if (frame <= duration && frame % waitTime == 0) {
-                simulation.uploadParticles(1e4, 0, 0, Mathf::randomFloat(1000));
+                simulation.uploadParticles(count, ion, deposit, Mathf::randomFloat(1000));
             }
             simulation.tick(Settings::dt);
             frame++;
@@ -315,7 +328,7 @@ void renderMesh(Simulation& simulation) {
 
             simulation.downloadVoxels();
             measure.measure(simulation.grid, Settings::X/2, 0, Settings::Z/2, 0, 1, 0);
-            
+            cout << "======================================";
             for (int i = 0;i < measure.ZYPlane.size();i++) {
                 if (i % 10 == 0) cout << endl;
                 cout << measure.ZYPlane[i] << ", ";
