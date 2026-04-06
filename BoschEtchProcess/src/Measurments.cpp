@@ -15,7 +15,12 @@ void Measure::measure(Grid& g, int x, int y, int z, int dx, int dy, int dz) {
 				break;
 			}
 		}
-		XYPlane.push_back(d);
+		if (i >= XYPlane.size()) {
+			XYPlane.push_back(d);
+		}
+		else {
+			XYPlane[i] = d;
+		}
 	}
 
 	for (int i = 0;i < Settings::Z;i++) {
@@ -30,7 +35,12 @@ void Measure::measure(Grid& g, int x, int y, int z, int dx, int dy, int dz) {
 				break;
 			}
 		}
-		ZYPlane.push_back(d);
+		if (i >= ZYPlane.size()) {
+			ZYPlane.push_back(d);
+		}
+		else {
+			ZYPlane[i] = d;
+		}
 	}
 }
 

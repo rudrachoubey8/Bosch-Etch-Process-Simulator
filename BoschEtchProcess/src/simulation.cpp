@@ -293,6 +293,24 @@ void Simulation::uploadVoxels(std::vector<Voxel>& voxels) {
     );
 }
 
+void Simulation::reset() {
+
+    for (int x = 0; x < Settings::X; x++) {
+        for (int y = 0; y < Settings::Y; y++) {
+            for (int z = 0; z < Settings::Z; z++) {
+
+                Voxel& v = grid.at(x, y, z);
+
+                if (v.solid != 0) {
+                    v.solid = 1;
+                }
+
+            }
+        }
+    }
+
+}
+
 void Simulation::dispatchHits(GLuint program) {
 
     uint32_t hitCount = 0;

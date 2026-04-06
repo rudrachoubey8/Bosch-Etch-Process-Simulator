@@ -67,7 +67,18 @@ void main() {
     if (p.x>=gridSize.x||p.y>=gridSize.y||p.z>=gridSize.z) return;
 
     int id = idx(p.x,p.y,p.z);
-    if (voxels[id].solid == 0) return;
+
+    
+    if (voxels[id].solid == 0 ) return;
+
+    bool surrounded = voxels[idx(p.x+1, p.y, p.z)].solid == 1 && voxels[idx(p.x, p.y+1, p.z)].solid == 1 && 
+    voxels[idx(p.x, p.y, p.z+1)].solid == 1 && voxels[idx(p.x-1, p.y, p.z)].solid == 1 && voxels[idx(p.x, p.y-1, p.z)].solid == 1&& voxels[idx(p.x, p.y, p.z-1)].solid == 1;
+
+    if(p.x - 1 < 0 || p.x + 1 >= gridSize.x || p.z - 1 < 0 || p.z + 1 >= gridSize.y || p.z - 1 < 0 || p.z + 1 >= gridSize.z)
+    {
+        surrounded = false;
+        }
+    if(surrounded) return;
 
     vec3 c = colorFromType(p.y, voxels[id].type);
     vec3 v = vec3(p);

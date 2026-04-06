@@ -1,5 +1,6 @@
 #include <structures.h>
 #include <vector>
+#include "settings.h"
 class Measure {
 
 public:

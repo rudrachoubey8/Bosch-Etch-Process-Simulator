@@ -72,7 +72,7 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos)
     float sensitivity = 0.005f;
 
     // Only rotate if button is pressed
-    if(buttonDown){
+    if (buttonDown) {
         yaw += dx * sensitivity;
         pitch += dy * sensitivity;
     }
@@ -91,7 +91,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
     {
         buttonDown = false;
     }
-    
+
 }
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 {
@@ -134,8 +134,8 @@ void renderMesh(Simulation& simulation) {
     GLFWwindow* window =
         glfwCreateWindow(width, height, "Bosch Etch Mesh", nullptr, nullptr);
     if (!window) return;
-    
-    //Initialize callback functions
+
+    // Initialize callback functions
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetCursorPosCallback(window, mouseCallback);
     glfwSetScrollCallback(window, scrollCallback);
@@ -175,9 +175,9 @@ void renderMesh(Simulation& simulation) {
     };
 
     float Transform[16] = {
-        1, 0,  0, -Settings::X/2,
-        0, -1, 0, Settings::Y/2,
-        0, 0,  1, -Settings::Z/2,
+        1, 0,  0, -Settings::X / 2,
+        0, -1, 0, Settings::Y / 2,
+        0, 0,  1, -Settings::Z / 2,
         0, 0,  0, 1
     };
 
@@ -192,7 +192,7 @@ void renderMesh(Simulation& simulation) {
         1, GL_TRUE, Transform
     );
 
-    
+
     // Inititalize Mesh 
     Mesh mesh(simulation.grid);
 
@@ -213,13 +213,19 @@ void renderMesh(Simulation& simulation) {
     bool draw = 1;
     bool deposit = 0;
     bool ion = 0;
-    
+
 
     // Initialize Measurment function
     Measure measure;
-    
+
     int duration = 3000;
     int waitTime = 10;
+
+    int voxelType = 1;
+    int x0 = 0, x1 = 0;
+    int y0 = 0, y1 = 0;
+    int z0 = 0, z1 = 0;
+
 
 
 
@@ -227,13 +233,13 @@ void renderMesh(Simulation& simulation) {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
 
-    // Style (optional but makes it look less 2002)
+
     ImGui::StyleColorsDark();
 
     // Backend init
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 430");
-    
+
     while (!glfwWindowShouldClose(window)) {
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -246,23 +252,46 @@ void renderMesh(Simulation& simulation) {
         ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
         ImGui::SliderInt("Particle Count", &count, 0, 1e6);
 
-
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
         ImGui::Checkbox("Ion", &ion);
         ImGui::Checkbox("Deposit", &deposit);
 
-        if(ImGui::Button("Reset")) {
+        if (ImGui::Button("Reset")) {
             frame = 0;
             tickTime = 0;
 
-            initializeGrid(simulation);
+
             simulation.uploadVoxels(simulation.grid.voxels);
 
             mesh.initGPU();
             mesh.setVoxelBuffer(simulation.voxelSSBO);
             mesh.buildMesh();
         }
+
+        ImGui::Separator();
+        ImGui::Text("Voxel Editor");
+        ImGui::SliderInt("Voxel Type", &voxelType, 1, 3);
+
+        ImGui::Separator();
+        ImGui::InputInt("x0", &x0);ImGui::InputInt("x1", &x1);
+        ImGui::InputInt("y0", &y0);ImGui::InputInt("y1", &y1);
+        ImGui::InputInt("z0", &z0);ImGui::InputInt("z1", &z1);
+
+        if (ImGui::Button("Fill")) {
+
+            Voxel voxel{};
+
+            voxel.solid = 1;
+            voxel.type = voxelType;
+            voxel.threshold = voxelType == 1 ? 100 : 5000;
+            voxel.depositThreshold = voxelType == 1 ? 10 : 5000;
+
+
+            simulation.initRectangle(voxel, x0, y0, z0, x1, y1, z1);
+            simulation.uploadVoxels(simulation.grid.voxels);
+        }
+
 
         ImGui::End();
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
@@ -298,7 +327,7 @@ void renderMesh(Simulation& simulation) {
             1, GL_TRUE, Size
         );
 
-        
+
         if (!pause) {
             auto t1 = Clock::now();
             if (frame <= duration && frame % waitTime == 0) {
@@ -322,18 +351,18 @@ void renderMesh(Simulation& simulation) {
 
         glfwSwapBuffers(window);
         glfwPollEvents();
-        
+
         if (frame == duration + 1) {
             cout << tickTime / (duration + 1);
 
             simulation.downloadVoxels();
-            measure.measure(simulation.grid, Settings::X/2, 0, Settings::Z/2, 0, 1, 0);
-            cout << "======================================";
+            measure.measure(simulation.grid, Settings::X / 2, 0, Settings::Z / 2, 0, 1, 0);
+            cout << "\n======================================\n";
             for (int i = 0;i < measure.ZYPlane.size();i++) {
                 if (i % 10 == 0) cout << endl;
                 cout << measure.ZYPlane[i] << ", ";
             }
-            
+
             std::vector<float> conv = measure.convolve(measure.ZYPlane, 5);
             int depth = measure.getDepth(conv);
 
@@ -341,6 +370,7 @@ void renderMesh(Simulation& simulation) {
             cout << "Depth: " << depth;
             cout << endl;
             cout << "Width: " << measure.getWidth(conv, depth / 2);
+            cout << endl;
         }
     }
     ImGui_ImplOpenGL3_Shutdown();

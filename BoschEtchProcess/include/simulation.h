@@ -31,6 +31,7 @@ public:
 
 	std::vector<HitEvent> downloadHits();
 	void downloadVoxels();
+	void reset();
 	int getParticleCount();
 	
 private:
