@@ -106,11 +106,6 @@ void Mesh::initGPU() {
     // shaders
     std::string path = "shaders/mesh.comp.shader";
     computeProgram = loadComputeProgram(path.c_str());
-    std::string path = "shaders/mesh.comp.shader";
-    axesProgram = loadComputeProgram(path.c_str());
-
-}
-void Mesh::drawAxes() {
 
 }
 void Mesh::buildMesh() {
@@ -119,10 +114,7 @@ void Mesh::buildMesh() {
     uint32_t zero = 0;
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
 
-    glUseProgram(axesProgram);
-
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
-
+    
     glUseProgram(computeProgram);
     glUniform3i(
         glGetUniformLocation(computeProgram, "gridSize"),

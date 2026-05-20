@@ -15,7 +15,6 @@ public:
     void initGPU();     // create buffers, shaders, VAO
     void buildMesh();   // dispatch compute
     void draw();        // render
-    void drawAxes();
     void setRenderingProgram(GLuint program);
     void setVoxelBuffer(GLuint ssbo);
     uint32_t vertCount = 0;
