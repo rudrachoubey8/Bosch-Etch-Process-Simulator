@@ -50,6 +50,13 @@ static GLuint loadComputeProgram(const char* path) {
     return prog;
 }
 
+namespace Math {
+    float randomFloat(float max) {
+        static std::mt19937 gen{ std::random_device{}() };
+        std::uniform_real_distribution<float> dist(0.0f, max);
+        return dist(gen);
+    }
+}
 
 Simulation::Simulation(int X_, int Y_, int Z_, float voxelSize_)
     : grid(X_, Y_, Z_) {
@@ -78,11 +85,11 @@ void Simulation::initParticle(const Particle& particle) {
     particles.push_back(particle);
 }
 
-void Simulation::tick(float dt)
+void Simulation::tick(float reflectionProbability)
 {
     bindBuffers();
 
-    dispatchRayMarch(rayMarchProgram, getParticleCount());
+    dispatchRayMarch(rayMarchProgram, getParticleCount(), reflectionProbability);
     dispatchHits(resolveHitsProgram);
 }
 
@@ -90,14 +97,20 @@ void Simulation::setVoxel(int x, int y, int z, Voxel v) {
     grid.at(x, y, z) = v;
 }
 
-void Simulation::dispatchRayMarch(GLuint program, int particleCount)
+void Simulation::dispatchRayMarch(GLuint program, int particleCount, float reflectionProbability)
 {
     glUseProgram(program);
+
+    uint32_t s[12] = {1, 1, 0, 5, 20, 0, 25, 5, 0, 17, 3, 0};
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, damageDataSSBO);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t) * 12, &s);
+
 
     glUniform1f(glGetUniformLocation(program, "voxelSize"), voxelSize);
     glUniform1i(glGetUniformLocation(program, "maxSteps"), MAX_STEPS);
     glUniform3i(glGetUniformLocation(program, "gridSize"), grid.X, grid.Y, grid.Z);
     glUniform1i(glGetUniformLocation(program, "particleCount"), particleCount);
+    glUniform1f(glGetUniformLocation(program, "reflectionProbability"), reflectionProbability);
 
     // Reset hit counter
     {
@@ -216,6 +229,15 @@ void Simulation::createBuffers() {
         GL_DYNAMIC_DRAW
     );
 
+    glGenBuffers(1, &damageDataSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, damageDataSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(uint32_t) * 12,
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
+
     glGenBuffers(1, &finalParticles);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticles);
     glBufferData(
@@ -253,6 +275,7 @@ void Simulation::bindBuffers(){
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, particleSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, hitSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 15, damageDataSSBO);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, counterSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, finalParticlesCount);
@@ -260,18 +283,18 @@ void Simulation::bindBuffers(){
 
 }
 
-void Simulation::uploadParticles(int n, bool type, bool deposit,float random) {
+void Simulation::uploadParticles(int n, bool type, bool deposit, float energy) {
 
     constexpr float pi = 3.1415926f;
     float halfAngle = type ? pi / 8.0f : pi / 2.0f;
-
+    float random = Math::randomFloat(100);
     float cosTheta = cos(halfAngle);
-    
     glUseProgram(initParticlesProgram);
 
     glUniform1ui(glGetUniformLocation(initParticlesProgram, "startIndex"), getParticleCount());
     glUniform1ui(glGetUniformLocation(initParticlesProgram, "particleCount"), n);
     glUniform1i(glGetUniformLocation(initParticlesProgram, "type"), deposit);
+    glUniform1f(glGetUniformLocation(initParticlesProgram, "energy"), energy);
     
     glUniform1f(glGetUniformLocation(initParticlesProgram, "cosTheta"), cosTheta);
     glUniform1f(glGetUniformLocation(initParticlesProgram, "X"), Settings::X);

@@ -2,9 +2,9 @@
 #pragma once
 
 namespace Settings {
-    constexpr int X = 200;
-    constexpr int Y = 100;
-    constexpr int Z = 200;
+    constexpr int X = 30;
+    constexpr int Y = 150;
+    constexpr int Z = 30;
 
     constexpr float voxelSize = 1.0f;
     constexpr float dt = 0.001f;

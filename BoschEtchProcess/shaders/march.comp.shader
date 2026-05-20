@@ -38,6 +38,10 @@ layout(std430, binding = 7) buffer HitBuffer {
     HitEvent hits[];
 };
 
+layout(std430, binding = 15) buffer DamageData {
+    uint damageData[];
+};
+
 layout(std430, binding = 8) buffer HitCounter {
     uint hitCount;
 };
@@ -54,6 +58,7 @@ uniform float voxelSize;
 uniform int maxSteps;
 uniform ivec3 gridSize;
 uniform int particleCount;
+uniform float reflectionProbability;
 
 uint hash(uint x)
 {
@@ -171,7 +176,7 @@ void main()
 
             uint h = hash(id ^ uint(step));
 
-            if((h & 255u) < 150u)
+            if(h /  4294967295.0f < reflectionProbability)
             {
                 dir = reflect(dir, vec3(normal));
                 rayDir = dir;

@@ -12,9 +12,13 @@
 #include <GLFW/glfw3.h>
 #include <chrono>
 
+
+#include "stackSimulations.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+
+
 
 using namespace std;
 // ---------------- RANDOM --------------------------
@@ -101,24 +105,6 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
     if (D > 20.0f) D = 20.0f;
 }
 
-void initializeGrid(Simulation& simulation) {
-    Voxel voxel{};
-
-    voxel.solid = 1;
-    voxel.type = 1;
-    voxel.threshold = 100;
-    voxel.depositThreshold = 10;
-
-    Voxel mask{};
-
-    mask.solid = 1;
-    mask.type = 3;
-    mask.threshold = 5000;
-    mask.depositThreshold = 5000;
-    simulation.initRectangle(voxel, 0, 10, 0, Settings::X, Settings::Y, Settings::Z);
-
-}
-
 
 void renderMesh(Simulation& simulation) {
 
@@ -176,7 +162,7 @@ void renderMesh(Simulation& simulation) {
 
     float Transform[16] = {
         1, 0,  0, -Settings::X / 2,
-        0, -1, 0, Settings::Y / 2,
+        0, 1, 0, -Settings::Y / 2,
         0, 0,  1, -Settings::Z / 2,
         0, 0,  0, 1
     };
@@ -202,9 +188,12 @@ void renderMesh(Simulation& simulation) {
     simulation.uploadVoxels(simulation.grid.voxels);
 
     mesh.initGPU();
+    vector<Voxel> v = simulation.grid.voxels;
+    
     mesh.setVoxelBuffer(simulation.voxelSSBO);
     mesh.buildMesh();
 
+    simulation.tick(Settings::dt);
     int frame = 0;
     int count = 1e4;
     double tickTime = 0;
@@ -217,11 +206,15 @@ void renderMesh(Simulation& simulation) {
 
     // Initialize Measurment function
     Measure measure;
-
+    
     int duration = 3000;
     int waitTime = 10;
 
     int voxelType = 1;
+    int solid = 1;
+    float energy = 1.0f;
+    float reflectionProbability = 0.5f;
+
     int x0 = 0, x1 = 0;
     int y0 = 0, y1 = 0;
     int z0 = 0, z1 = 0;
@@ -250,7 +243,9 @@ void renderMesh(Simulation& simulation) {
 
         ImGui::SliderInt("Duration", &duration, 0, 10000);
         ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
-        ImGui::SliderInt("Particle Count", &count, 0, 1e6);
+        ImGui::InputInt("Particle Count", &count);
+        ImGui::InputFloat("Particle Energy", &energy);
+        ImGui::InputFloat("Reflection Probability", &reflectionProbability);
 
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
@@ -261,8 +256,7 @@ void renderMesh(Simulation& simulation) {
             frame = 0;
             tickTime = 0;
 
-
-            simulation.uploadVoxels(simulation.grid.voxels);
+            simulation.uploadVoxels(v);
 
             mesh.initGPU();
             mesh.setVoxelBuffer(simulation.voxelSSBO);
@@ -272,6 +266,7 @@ void renderMesh(Simulation& simulation) {
         ImGui::Separator();
         ImGui::Text("Voxel Editor");
         ImGui::SliderInt("Voxel Type", &voxelType, 1, 3);
+        ImGui::SliderInt("Solid", &solid, 0, 1);
 
         ImGui::Separator();
         ImGui::InputInt("x0", &x0);ImGui::InputInt("x1", &x1);
@@ -282,18 +277,21 @@ void renderMesh(Simulation& simulation) {
 
             Voxel voxel{};
 
-            voxel.solid = 1;
+            voxel.solid = solid;
             voxel.type = voxelType;
             voxel.threshold = voxelType == 1 ? 100 : 5000;
             voxel.depositThreshold = voxelType == 1 ? 10 : 5000;
 
 
             simulation.initRectangle(voxel, x0, y0, z0, x1, y1, z1);
-            simulation.uploadVoxels(simulation.grid.voxels);
+            v = simulation.grid.voxels;
+            simulation.uploadVoxels(v);
         }
 
 
         ImGui::End();
+
+
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -331,7 +329,7 @@ void renderMesh(Simulation& simulation) {
         if (!pause) {
             auto t1 = Clock::now();
             if (frame <= duration && frame % waitTime == 0) {
-                simulation.uploadParticles(count, ion, deposit, Mathf::randomFloat(1000));
+                simulation.uploadParticles(count, ion, deposit, energy);
             }
             simulation.tick(Settings::dt);
             frame++;
@@ -353,11 +351,11 @@ void renderMesh(Simulation& simulation) {
         glfwPollEvents();
 
         if (frame == duration + 1) {
-            cout << tickTime / (duration + 1);
-
+            cout << "\n======================================\n";
+            cout << "Time Per Frame: " << tickTime / (duration + 1) << "\n\n";
+            v = simulation.grid.voxels;
             simulation.downloadVoxels();
             measure.measure(simulation.grid, Settings::X / 2, 0, Settings::Z / 2, 0, 1, 0);
-            cout << "\n======================================\n";
             for (int i = 0;i < measure.ZYPlane.size();i++) {
                 if (i % 10 == 0) cout << endl;
                 cout << measure.ZYPlane[i] << ", ";
@@ -382,16 +380,7 @@ void renderMesh(Simulation& simulation) {
 
 int main() {
 
-    Simulation simulation(
-        Settings::X,
-        Settings::Y,
-        Settings::Z,
-        Settings::voxelSize
-    );
-
-    initializeGrid(simulation);
-    // Start loop
-    renderMesh(simulation);
+    renderMesh(stackSimulation());
 
     return 0;
 }

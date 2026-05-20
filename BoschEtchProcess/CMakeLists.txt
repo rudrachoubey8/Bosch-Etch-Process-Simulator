@@ -19,7 +19,7 @@ add_executable(BoschEtchProcess
     imgui/backend/imgui_impl_opengl3.cpp
     imgui/backend/imgui_impl_glfw.cpp
     
-)
+ "src/simulations/stackSimulation.cpp" "include/stackSimulations.h")
 
 target_include_directories(BoschEtchProcess PRIVATE
     ${PROJECT_SOURCE_DIR}/include

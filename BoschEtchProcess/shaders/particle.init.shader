@@ -28,6 +28,7 @@ uniform float cosTheta;
 uniform float X;
 uniform float Z;
 uniform float seed;
+uniform float energy;
 
 uint hash(uint x)
 {
@@ -63,15 +64,15 @@ void main()
     particles[index].deposit = type;
     particles[index].speed = 10.0;
     particles[index].alive = 1;
-    particles[index].energy = 50.0;
+    particles[index].energy = energy;
 
     particles[index].dx = r * cos(phi);
-    particles[index].dy = y;
+    particles[index].dy = -y;
     particles[index].dz = r * sin(phi);
 
-    particles[index].x = X / 3 + rand01(id * 3 + uint(seed)) * X / 3;
-    particles[index].y = 1.0;
-    particles[index].z = Z / 3 + rand01(id * 4 + uint(seed)) * Z / 3;
+    particles[index].x = rand01(id * 3 + uint(seed)) * 25;
+    particles[index].y = 145.0;
+    particles[index].z = rand01(id * 4 + uint(seed)) * 25;
     if(id == 0)
     {
         atomicAdd(finalParticlesCount, particleCount);
