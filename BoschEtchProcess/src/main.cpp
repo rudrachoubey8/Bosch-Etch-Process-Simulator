@@ -142,8 +142,8 @@ void renderMesh(Simulation& simulation) {
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     Shader shader(
-        string(PROJECT_ROOT) + "/shaders/vertex.shader",
-        string(PROJECT_ROOT) + "/shaders/fragment.shader"
+        "shaders/vertex.shader",
+        "shaders/fragment.shader"
     );
 
     glUseProgram(shader.shaderProgram);
@@ -214,6 +214,7 @@ void renderMesh(Simulation& simulation) {
     int solid = 1;
     float energy = 1.0f;
     float reflectionProbability = 0.5f;
+    float halfAngle = 90;
 
     int x0 = 0, x1 = 0;
     int y0 = 0, y1 = 0;
@@ -246,6 +247,7 @@ void renderMesh(Simulation& simulation) {
         ImGui::InputInt("Particle Count", &count);
         ImGui::InputFloat("Particle Energy", &energy);
         ImGui::InputFloat("Reflection Probability", &reflectionProbability);
+        ImGui::InputFloat("half Angle (Deg)", &halfAngle);
 
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
@@ -329,7 +331,7 @@ void renderMesh(Simulation& simulation) {
         if (!pause) {
             auto t1 = Clock::now();
             if (frame <= duration && frame % waitTime == 0) {
-                simulation.uploadParticles(count, ion, deposit, energy);
+                simulation.uploadParticles(count, halfAngle, deposit, energy);
             }
             simulation.tick(Settings::dt);
             frame++;

@@ -15,6 +15,7 @@ public:
     void initGPU();     // create buffers, shaders, VAO
     void buildMesh();   // dispatch compute
     void draw();        // render
+    void drawAxes();
     void setRenderingProgram(GLuint program);
     void setVoxelBuffer(GLuint ssbo);
     uint32_t vertCount = 0;
@@ -27,6 +28,7 @@ private:
     GLuint counterSSBO = 0;
     GLuint vao = 0;
     GLuint computeProgram = 0;
+    GLuint axesProgram = 0;
     GLuint renderProgram = 0;
 
 };

@@ -18,8 +18,24 @@ add_executable(BoschEtchProcess
 
     imgui/backend/imgui_impl_opengl3.cpp
     imgui/backend/imgui_impl_glfw.cpp
+
+    shaders/fragment.shader
+    shaders/march.comp.shader
+    shaders/mesh.comp.shader
+    shaders/particle.init.shader
+    shaders/resolveHits.shader
+    shaders/vertex.shader
     
- "src/simulations/stackSimulation.cpp" "include/stackSimulations.h")
+    "src/simulations/stackSimulation.cpp" 
+    "include/stackSimulations.h"
+
+)
+
+add_custom_command(TARGET BoschEtchProcess POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${PROJECT_SOURCE_DIR}/shaders
+    $<TARGET_FILE_DIR:BoschEtchProcess>/shaders
+)
 
 target_include_directories(BoschEtchProcess PRIVATE
     ${PROJECT_SOURCE_DIR}/include

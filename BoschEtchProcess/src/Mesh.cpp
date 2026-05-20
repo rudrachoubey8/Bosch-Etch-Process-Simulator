@@ -71,6 +71,7 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
+
     // atomic counter
     glGenBuffers(1, &counterSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
@@ -103,16 +104,24 @@ void Mesh::initGPU() {
     glEnableVertexAttribArray(2);
 
     // shaders
-    std::string path = std::string(PROJECT_ROOT) + "/shaders/mesh.comp.shader";
+    std::string path = "shaders/mesh.comp.shader";
     computeProgram = loadComputeProgram(path.c_str());
+    std::string path = "shaders/mesh.comp.shader";
+    axesProgram = loadComputeProgram(path.c_str());
 
 }
+void Mesh::drawAxes() {
 
+}
 void Mesh::buildMesh() {
     vertCount = 0;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
     uint32_t zero = 0;
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
+
+    glUseProgram(axesProgram);
+
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
     glUseProgram(computeProgram);
     glUniform3i(

@@ -193,13 +193,13 @@ int Simulation::getParticleCount()
 }
 
 void Simulation::createBuffers() {
-    std::string path = std::string(PROJECT_ROOT) + "/shaders/march.comp.shader";
+    std::string path = "shaders/march.comp.shader";
     rayMarchProgram = loadComputeProgram(path.c_str());
 
-    std::string path2 = std::string(PROJECT_ROOT) + "/shaders/resolveHits.shader";
+    std::string path2 = "shaders/resolveHits.shader";
     resolveHitsProgram = loadComputeProgram(path2.c_str());
 
-    std::string path3 = std::string(PROJECT_ROOT) + "/shaders/particle.init.shader";
+    std::string path3 = "shaders/particle.init.shader";
     initParticlesProgram = loadComputeProgram(path3.c_str());
 
     glGenBuffers(1, &particleSSBO);
@@ -228,6 +228,7 @@ void Simulation::createBuffers() {
         nullptr,
         GL_DYNAMIC_DRAW
     );
+
 
     glGenBuffers(1, &damageDataSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, damageDataSSBO);
@@ -283,12 +284,11 @@ void Simulation::bindBuffers(){
 
 }
 
-void Simulation::uploadParticles(int n, bool type, bool deposit, float energy) {
+void Simulation::uploadParticles(int n, float halfAngle, bool deposit, float energy) {
 
     constexpr float pi = 3.1415926f;
-    float halfAngle = type ? pi / 8.0f : pi / 2.0f;
     float random = Math::randomFloat(100);
-    float cosTheta = cos(halfAngle);
+    float cosTheta = cos(halfAngle * 3.141592653589/180);
     glUseProgram(initParticlesProgram);
 
     glUniform1ui(glGetUniformLocation(initParticlesProgram, "startIndex"), getParticleCount());

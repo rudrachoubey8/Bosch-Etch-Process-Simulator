@@ -24,7 +24,7 @@ public:
 
 	void createBuffers();
 	void bindBuffers();
-	void uploadParticles(int n, bool type, bool deposit, float random);
+	void uploadParticles(int n, float halfAngle, bool deposit, float random);
 	void uploadVoxels(std::vector<Voxel>& voxels);
 	void dispatchRayMarch(GLuint program, int particleCount, float reflectionProbability);
 	void dispatchHits(GLuint program);
@@ -40,7 +40,7 @@ private:
 	uint32_t MAX_HITS = 50000;
 	uint32_t MAX_STEPS = 5000;
 	float MIN_ENERGY = 1e-6f;
-	GLuint particleSSBO = 0, hitSSBO = 0, damageDataSSBO = 0,counterSSBO = 0, rayMarchProgram = 0, finalParticlesCount = 0, finalParticles = 0;
+	GLuint particleSSBO = 0, hitSSBO = 0, damageDataSSBO = 0,counterSSBO = 0, axesSSBO = 0, rayMarchProgram = 0, finalParticlesCount = 0, finalParticles = 0;
 	GLuint resolveHitsProgram = 0;
 	GLuint initParticlesProgram = 0;
 };
