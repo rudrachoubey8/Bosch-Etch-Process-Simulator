@@ -178,6 +178,7 @@ void renderMesh(Simulation& simulation) {
         1, GL_TRUE, Transform
     );
 
+    vector<float> gridData = {0,0,0,0,0,0,0,0,0};
 
     // Inititalize Mesh 
     Mesh mesh(simulation.grid);
@@ -193,9 +194,9 @@ void renderMesh(Simulation& simulation) {
     mesh.setVoxelBuffer(simulation.voxelSSBO);
     mesh.buildMesh();
 
-    simulation.tick(Settings::dt);
     int frame = 0;
     int count = 1e4;
+    int particleType = 0;
     double tickTime = 0;
 
     bool pause = 1;
@@ -212,13 +213,21 @@ void renderMesh(Simulation& simulation) {
 
     int voxelType = 1;
     int solid = 1;
+    
     float energy = 1.0f;
-    float reflectionProbability = 0.5f;
     float halfAngle = 90;
 
     int x0 = 0, x1 = 0;
     int y0 = 0, y1 = 0;
     int z0 = 0, z1 = 0;
+
+    float voxelThreshold = 500;
+    float voxelDepositThreshold = 500;
+    float voxelReactionChance = 0.5;
+
+    int typesOfVoxels = 3;
+    int typesOfParticles = 3;
+    simulation.tick(gridData, typesOfVoxels, typesOfParticles);
 
 
 
@@ -246,13 +255,11 @@ void renderMesh(Simulation& simulation) {
         ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
         ImGui::InputInt("Particle Count", &count);
         ImGui::InputFloat("Particle Energy", &energy);
-        ImGui::InputFloat("Reflection Probability", &reflectionProbability);
         ImGui::InputFloat("half Angle (Deg)", &halfAngle);
-
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
-        ImGui::Checkbox("Ion", &ion);
         ImGui::Checkbox("Deposit", &deposit);
+        ImGui::InputInt("Type", &particleType);
 
         if (ImGui::Button("Reset")) {
             frame = 0;
@@ -264,10 +271,15 @@ void renderMesh(Simulation& simulation) {
             mesh.setVoxelBuffer(simulation.voxelSSBO);
             mesh.buildMesh();
         }
+        ImGui::Separator();
+        RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData);
 
         ImGui::Separator();
         ImGui::Text("Voxel Editor");
         ImGui::SliderInt("Voxel Type", &voxelType, 1, 3);
+        ImGui::InputFloat("Threshold", &voxelThreshold);
+        ImGui::InputFloat("Deposit Threshold", &voxelDepositThreshold);
+        ImGui::InputFloat("Voxel Reaction Chance", &voxelReactionChance);
         ImGui::SliderInt("Solid", &solid, 0, 1);
 
         ImGui::Separator();
@@ -275,14 +287,16 @@ void renderMesh(Simulation& simulation) {
         ImGui::InputInt("y0", &y0);ImGui::InputInt("y1", &y1);
         ImGui::InputInt("z0", &z0);ImGui::InputInt("z1", &z1);
 
+        
+
         if (ImGui::Button("Fill")) {
 
             Voxel voxel{};
 
             voxel.solid = solid;
             voxel.type = voxelType;
-            voxel.threshold = voxelType == 1 ? 100 : 5000;
-            voxel.depositThreshold = voxelType == 1 ? 10 : 5000;
+            voxel.threshold = voxelThreshold;
+            voxel.depositThreshold = voxelDepositThreshold;
 
 
             simulation.initRectangle(voxel, x0, y0, z0, x1, y1, z1);
@@ -331,9 +345,9 @@ void renderMesh(Simulation& simulation) {
         if (!pause) {
             auto t1 = Clock::now();
             if (frame <= duration && frame % waitTime == 0) {
-                simulation.uploadParticles(count, halfAngle, deposit, energy);
+                simulation.uploadParticles(count, halfAngle, particleType, energy);
             }
-            simulation.tick(Settings::dt);
+            simulation.tick(gridData, typesOfVoxels, typesOfParticles);
             frame++;
             auto t2 = Clock::now();
             tickTime += ms(t2 - t1).count();

@@ -8,6 +8,7 @@ struct Particle {
     int deposit;
     float speed;
     float energy;
+    int type;
 };
 
 layout(std430, binding = 5) buffer ParticleBuffer {
@@ -61,7 +62,8 @@ void main()
     float phi = 6.28318530718 * v;
     float r = sqrt(1.0 - y * y);
 
-    particles[index].deposit = type;
+    particles[index].deposit = 0;
+    particles[index].type = type;
     particles[index].speed = 10.0;
     particles[index].alive = 1;
     particles[index].energy = energy;
@@ -70,9 +72,9 @@ void main()
     particles[index].dy = -y;
     particles[index].dz = r * sin(phi);
 
-    particles[index].x = rand01(id * 3 + uint(seed)) * 25;
+    particles[index].x = rand01(id * 3 + uint(seed)) * X;
     particles[index].y = 145.0;
-    particles[index].z = rand01(id * 4 + uint(seed)) * 25;
+    particles[index].z = rand01(id * 4 + uint(seed)) * Z;
     if(id == 0)
     {
         atomicAdd(finalParticlesCount, particleCount);

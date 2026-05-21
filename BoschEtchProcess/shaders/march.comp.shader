@@ -10,6 +10,7 @@ struct Particle {
     int deposit;
     float speed;
     float energy;
+    int type;
 };
 
 struct Voxel {
@@ -38,8 +39,8 @@ layout(std430, binding = 7) buffer HitBuffer {
     HitEvent hits[];
 };
 
-layout(std430, binding = 15) buffer DamageData {
-    uint damageData[];
+layout(std430, binding = 15) buffer ReactionData {
+    float reactionData[];
 };
 
 layout(std430, binding = 8) buffer HitCounter {
@@ -58,7 +59,8 @@ uniform float voxelSize;
 uniform int maxSteps;
 uniform ivec3 gridSize;
 uniform int particleCount;
-uniform float reflectionProbability;
+uniform int typesOfVoxels;
+uniform int typesOfParticles;
 
 uint hash(uint x)
 {
@@ -78,45 +80,76 @@ int voxelIndex(ivec3 c)
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
-    if(id >= particleCount) return;
+
+    if(id >= particleCount)
+        return;
 
     Particle p = particles[id];
-    if(p.alive == 0) return;
 
-    vec3 pos = vec3(p.x, p.y, p.z);
-    vec3 dir = normalize(vec3(p.dx, p.dy, p.dz));
+    if(p.alive == 0)
+        return;
+
+    vec3 origin =
+        vec3(p.x, p.y, p.z);
+
+    vec3 dir =
+        normalize(vec3(
+            p.dx,
+            p.dy,
+            p.dz
+        ));
+
     float energy = p.energy;
 
-    ivec3 cell = ivec3(floor(pos / voxelSize));
+    ivec3 cell =
+        ivec3(floor(origin / voxelSize));
 
-    vec3 rayDir = dir;
-    vec3 invDir = 1.0 / rayDir;
-
-    vec3 voxelPos = vec3(cell) * voxelSize;
+    ivec3 stepDir;
 
     vec3 tMax;
     vec3 tDelta;
-    ivec3 stepDir;
+
+    vec3 invDir = 1.0 / dir;
 
     for(int i = 0; i < 3; i++)
     {
-        if(rayDir[i] > 0.0)
+        if(dir[i] > 0.0)
         {
             stepDir[i] = 1;
-            float nextBoundary = voxelPos[i] + voxelSize;
-            tMax[i] = (nextBoundary - pos[i]) * invDir[i];
-            tDelta[i] = voxelSize * invDir[i];
+
+            float nextBoundary =
+                (float(cell[i]) + 1.0)
+                * voxelSize;
+
+            tMax[i] =
+                (nextBoundary - origin[i])
+                * invDir[i];
+
+            tDelta[i] =
+                voxelSize * abs(invDir[i]);
         }
         else
         {
             stepDir[i] = -1;
-            float nextBoundary = voxelPos[i];
-            tMax[i] = (nextBoundary - pos[i]) * invDir[i];
-            tDelta[i] = -voxelSize * invDir[i];
+
+            float nextBoundary =
+                float(cell[i])
+                * voxelSize;
+
+            tMax[i] =
+                (nextBoundary - origin[i])
+                * invDir[i];
+
+            tDelta[i] =
+                voxelSize * abs(invDir[i]);
         }
     }
 
-    for(int step = 0; step < maxSteps; step++)
+    float t = 0.0;
+
+    for(int step = 0;
+        step < maxSteps;
+        step++)
     {
         if(any(lessThan(cell, ivec3(0))) ||
            any(greaterThanEqual(cell, gridSize)))
@@ -126,121 +159,215 @@ void main()
         }
 
         int vidx = voxelIndex(cell);
+
         Voxel v = voxels[vidx];
 
         if(v.solid != 0)
         {
             ivec3 normal;
 
-            if(tMax.x < tMax.y && tMax.x < tMax.z)
-                normal = ivec3(-stepDir.x,0,0);
-            else if(tMax.y < tMax.z)
-                normal = ivec3(0,-stepDir.y,0);
+            if(tMax.x < tMax.y)
+            {
+                if(tMax.x < tMax.z)
+                    normal =
+                        ivec3(-stepDir.x,0,0);
+                else
+                    normal =
+                        ivec3(0,0,-stepDir.z);
+            }
             else
-                normal = ivec3(0,0,-stepDir.z);
+            {
+                if(tMax.y < tMax.z)
+                    normal =
+                        ivec3(0,-stepDir.y,0);
+                else
+                    normal =
+                        ivec3(0,0,-stepDir.z);
+            }
 
-            float damage = p.energy;
+            uint h =
+                hash(id ^ uint(step));
 
-            uint writeIdx = atomicAdd(hitCount,1u);
+            float reactionChance =
+                reactionData[
+                    p.type +
+                    v.type * typesOfParticles
+                ];
+
+            bool reflectParticle =
+                (h / 4294967295.0f)
+                < (1.0 - reactionChance);
+
+            if(reflectParticle)
+            {
+                vec3 hitPos =
+                    origin + dir * t;
+
+                dir =
+                    reflect(dir,
+                            vec3(normal));
+
+                origin =
+                    hitPos +
+                    vec3(normal) * 0.01;
+
+                cell =
+                    ivec3(
+                        floor(origin / voxelSize)
+                    );
+
+                invDir = 1.0 / dir;
+
+                for(int i = 0; i < 3; i++)
+                {
+                    if(dir[i] > 0.0)
+                    {
+                        stepDir[i] = 1;
+
+                        float nextBoundary =
+                            (float(cell[i]) + 1.0)
+                            * voxelSize;
+
+                        tMax[i] =
+                            (nextBoundary
+                             - origin[i])
+                            * invDir[i];
+
+                        tDelta[i] =
+                            voxelSize
+                            * abs(invDir[i]);
+                    }
+                    else
+                    {
+                        stepDir[i] = -1;
+
+                        float nextBoundary =
+                            float(cell[i])
+                            * voxelSize;
+
+                        tMax[i] =
+                            (nextBoundary
+                             - origin[i])
+                            * invDir[i];
+
+                        tDelta[i] =
+                            voxelSize
+                            * abs(invDir[i]);
+                    }
+                }
+
+                t = 0.0;
+
+                continue;
+            }
+
+            float damage = energy;
+
+            uint writeIdx =
+                atomicAdd(hitCount, 1u);
 
             if(writeIdx < MAX_HITS)
             {
                 if(p.deposit == 0)
                 {
-                    hits[writeIdx].cx = cell.x;
-                    hits[writeIdx].cy = cell.y;
-                    hits[writeIdx].cz = cell.z;
-                    hits[writeIdx].damage = damage;
+                    hits[writeIdx].cx =
+                        cell.x;
+
+                    hits[writeIdx].cy =
+                        cell.y;
+
+                    hits[writeIdx].cz =
+                        cell.z;
+
+                    hits[writeIdx].damage =
+                        damage;
+
                     hits[writeIdx].flags = 0u;
                 }
                 else
                 {
-                    ivec3 neighbor = cell + normal;
+                    ivec3 neighbor =
+                        cell + normal;
 
-                    hits[writeIdx].cx = neighbor.x;
-                    hits[writeIdx].cy = neighbor.y;
-                    hits[writeIdx].cz = neighbor.z;
-                    hits[writeIdx].damage = damage;
+                    hits[writeIdx].cx =
+                        neighbor.x;
+
+                    hits[writeIdx].cy =
+                        neighbor.y;
+
+                    hits[writeIdx].cz =
+                        neighbor.z;
+
+                    hits[writeIdx].damage =
+                        damage;
+
                     hits[writeIdx].flags = 1u;
-
-                    p.alive = 0;
-                    break;
                 }
             }
 
-            if(v.threshold - damage <= 0.0)
-            {
-                p.alive = 0;
-                break;
-            }
-
-            uint h = hash(id ^ uint(step));
-
-            if(h /  4294967295.0f < reflectionProbability)
-            {
-                dir = reflect(dir, vec3(normal));
-                rayDir = dir;
-                invDir = 1.0 / rayDir;
-            }
-            else
-            {
-                break;
-            }
-
-            energy -= damage;
-
-            if(energy < 1e-6)
-            {
-                p.alive = 0;
-                break;
-            }
+            p.alive = 0;
+            break;
         }
 
         if(tMax.x < tMax.y)
         {
             if(tMax.x < tMax.z)
             {
-                cell.x += stepDir.x;
-                pos += rayDir * tMax.x;
+                t = tMax.x;
+
                 tMax.x += tDelta.x;
+
+                cell.x += stepDir.x;
             }
             else
             {
-                cell.z += stepDir.z;
-                pos += rayDir * tMax.z;
+                t = tMax.z;
+
                 tMax.z += tDelta.z;
+
+                cell.z += stepDir.z;
             }
         }
         else
         {
             if(tMax.y < tMax.z)
             {
-                cell.y += stepDir.y;
-                pos += rayDir * tMax.y;
+                t = tMax.y;
+
                 tMax.y += tDelta.y;
+
+                cell.y += stepDir.y;
             }
             else
             {
-                cell.z += stepDir.z;
-                pos += rayDir * tMax.z;
+                t = tMax.z;
+
                 tMax.z += tDelta.z;
+
+                cell.z += stepDir.z;
             }
         }
     }
 
     if(p.alive != 0)
     {
-        p.x = pos.x;
-        p.y = pos.y;
-        p.z = pos.z;
+        vec3 finalPos =
+            origin + dir * t;
+
+        p.x = finalPos.x;
+        p.y = finalPos.y;
+        p.z = finalPos.z;
 
         p.dx = dir.x;
         p.dy = dir.y;
         p.dz = dir.z;
 
-        p.energy = energy;
+        uint idx =
+            atomicAdd(
+                finalParticlesCount,
+                1u
+            );
 
-        uint idx = atomicAdd(finalParticlesCount,1u);
         finalParticles[idx] = p;
     }
 }

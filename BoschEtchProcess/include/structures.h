@@ -1,7 +1,8 @@
 #pragma once
 #include <vector>
 #include <cstdint>
-
+#include <imgui.h>
+#include <string>
 struct Voxel {
     float threshold;
     float depositThreshold;
@@ -18,6 +19,7 @@ struct Particle {
     int deposit = 0;
     float speed = 0;
     float energy = 20;
+    int type = 0;
 };
 
 struct HitEvent {
@@ -48,3 +50,4 @@ private:
 
     int index(int x, int y, int z);
 };
+void RenderDynamicInputGrid(int& numCols, int& numRows, std::vector<float>& gridData);
