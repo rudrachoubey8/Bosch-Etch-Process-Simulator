@@ -107,6 +107,9 @@ void Mesh::initGPU() {
     std::string path = "shaders/mesh.comp.shader";
     computeProgram = loadComputeProgram(path.c_str());
 
+    path = "shaders/axes.shader";
+    axesProgram = loadComputeProgram(path.c_str());
+
 }
 void Mesh::buildMesh() {
     vertCount = 0;
@@ -132,6 +135,36 @@ void Mesh::buildMesh() {
         GL_SHADER_STORAGE_BARRIER_BIT |
         GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
     );
+
+
+    glUseProgram(axesProgram);
+    glUniform3i(
+        glGetUniformLocation(axesProgram, "gridSize"),
+        grid.X, grid.Y, grid.Z
+    );
+    glUniform1i(
+        glGetUniformLocation(axesProgram, "size"),
+        20
+    );
+    glDispatchCompute(
+        (grid.X + 7) / 8,
+        (1 + 7) / 8,
+        (grid.Z + 7) / 8
+    );
+
+
+    glMemoryBarrier(
+        GL_SHADER_STORAGE_BARRIER_BIT |
+        GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+    );
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(uint32_t),
+        &vertCount
+    );
+
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
     glGetBufferSubData(
         GL_SHADER_STORAGE_BUFFER,

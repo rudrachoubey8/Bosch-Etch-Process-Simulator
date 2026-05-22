@@ -39,18 +39,26 @@ Simulation stackSimulation() {
     DX.type = 3;
 
 
-    simulation.initRectangle(SiO2, 0, 0, 0, 25, 10, 25);
+    simulation.initRectangle(SiO2, 0, 0, 0,
+        Settings::X, 20,
+        Settings::X);
     for (int i = 1; i <= 10; i++)
     {
         if (i % 2 == 0) {
-            simulation.initRectangle(Si3N4, 0, i * 10, 0, 25, (i + 1) * 10, 25);
+            simulation.initRectangle(Si3N4, 0, i * 20, 0,
+                Settings::X, (i + 1) * 20,
+                Settings::X);
         }
         else {
-            simulation.initRectangle(Si, 0, i * 10, 0, 25, (i + 1) * 10, 25);
+            simulation.initRectangle(Si, 0, i * 20, 0,
+                Settings::X, (i + 1) * 20,
+                Settings::X);
         }
 
     }
-    simulation.initRectangle(SiO2, 0, 110, 0, 25, 140, 25);
+    simulation.initRectangle(SiO2, 0, 220, 0,
+        Settings::X, 280,
+        Settings::X);
 
     return simulation;
 }

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <random>
 #include <cmath>
+#include <fstream>
 
 #include "shader.h"
 #include "simulation.h"
@@ -223,10 +224,11 @@ void renderMesh(Simulation& simulation) {
 
     float voxelThreshold = 500;
     float voxelDepositThreshold = 500;
-    float voxelReactionChance = 0.5;
 
     int typesOfVoxels = 3;
     int typesOfParticles = 3;
+
+    static char gridFilename[256] = "grid.dat";
     simulation.tick(gridData, typesOfVoxels, typesOfParticles);
 
 
@@ -244,24 +246,30 @@ void renderMesh(Simulation& simulation) {
     ImGui_ImplOpenGL3_Init("#version 430");
 
     while (!glfwWindowShouldClose(window)) {
-
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::Begin("Simulation Controls");
+        //
+        // ========================= PARTICLE WINDOW =========================
+        //
+        ImGui::Begin("Particle Controls");
 
         ImGui::SliderInt("Duration", &duration, 0, 10000);
         ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
+
         ImGui::InputInt("Particle Count", &count);
         ImGui::InputFloat("Particle Energy", &energy);
-        ImGui::InputFloat("half Angle (Deg)", &halfAngle);
+        ImGui::InputFloat("Half Angle (Deg)", &halfAngle);
+
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
         ImGui::Checkbox("Deposit", &deposit);
+
         ImGui::InputInt("Type", &particleType);
 
-        if (ImGui::Button("Reset")) {
+        if (ImGui::Button("Reset"))
+        {
             frame = 0;
             tickTime = 0;
 
@@ -271,26 +279,45 @@ void renderMesh(Simulation& simulation) {
             mesh.setVoxelBuffer(simulation.voxelSSBO);
             mesh.buildMesh();
         }
-        ImGui::Separator();
+
+        ImGui::End();
+
+        //
+        // ========================= PROBABILITY WINDOW =========================
+        //
+        ImGui::Begin("Probability Grid");
+
         RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData);
 
-        ImGui::Separator();
-        ImGui::Text("Voxel Editor");
+        ImGui::End();
+
+        //
+        // ========================= VOXEL WINDOW =========================
+        //
+        ImGui::Begin("Voxel Editor");
+
+        ImGui::Text("Voxel Settings");
+
         ImGui::SliderInt("Voxel Type", &voxelType, 1, 3);
         ImGui::InputFloat("Threshold", &voxelThreshold);
         ImGui::InputFloat("Deposit Threshold", &voxelDepositThreshold);
-        ImGui::InputFloat("Voxel Reaction Chance", &voxelReactionChance);
         ImGui::SliderInt("Solid", &solid, 0, 1);
 
         ImGui::Separator();
-        ImGui::InputInt("x0", &x0);ImGui::InputInt("x1", &x1);
-        ImGui::InputInt("y0", &y0);ImGui::InputInt("y1", &y1);
-        ImGui::InputInt("z0", &z0);ImGui::InputInt("z1", &z1);
 
-        
+        ImGui::Text("Fill Region");
 
-        if (ImGui::Button("Fill")) {
+        ImGui::InputInt("x0", &x0);
+        ImGui::InputInt("x1", &x1);
 
+        ImGui::InputInt("y0", &y0);
+        ImGui::InputInt("y1", &y1);
+
+        ImGui::InputInt("z0", &z0);
+        ImGui::InputInt("z1", &z1);
+
+        if (ImGui::Button("Fill"))
+        {
             Voxel voxel{};
 
             voxel.solid = solid;
@@ -298,16 +325,84 @@ void renderMesh(Simulation& simulation) {
             voxel.threshold = voxelThreshold;
             voxel.depositThreshold = voxelDepositThreshold;
 
-
             simulation.initRectangle(voxel, x0, y0, z0, x1, y1, z1);
+
             v = simulation.grid.voxels;
             simulation.uploadVoxels(v);
         }
 
+        ImGui::End();
+        //
+        // ========================= GRID FILE WINDOW =========================
+        //
+        ImGui::Begin("Grid Save/Load");
+
+        ImGui::InputText("Filename", gridFilename, IM_ARRAYSIZE(gridFilename));
+
+        if (ImGui::Button("Save Grid"))
+        {
+            std::ofstream out(gridFilename, std::ios::binary);
+
+            if (out.is_open())
+            {
+                size_t voxelCount = simulation.grid.voxels.size();
+
+                out.write((char*)&voxelCount, sizeof(size_t));
+                out.write(
+                    (char*)simulation.grid.voxels.data(),
+                    voxelCount * sizeof(Voxel)
+                );
+
+                out.close();
+
+                std::cout << "Saved grid to: " << gridFilename << std::endl;
+            }
+            else
+            {
+                std::cout << "Failed to save grid.\n";
+            }
+        }
+
+        if (ImGui::Button("Load Grid"))
+        {
+            std::ifstream in(gridFilename, std::ios::binary);
+
+            if (in.is_open())
+            {
+                size_t voxelCount = 0;
+
+                in.read((char*)&voxelCount, sizeof(size_t));
+
+                if (voxelCount == simulation.grid.voxels.size())
+                {
+                    in.read(
+                        (char*)simulation.grid.voxels.data(),
+                        voxelCount * sizeof(Voxel)
+                    );
+
+                    in.close();
+
+                    simulation.uploadVoxels(simulation.grid.voxels);
+
+                    mesh.initGPU();
+                    mesh.setVoxelBuffer(simulation.voxelSSBO);
+                    mesh.buildMesh();
+
+                    std::cout << "Loaded grid from: " << gridFilename << std::endl;
+                }
+                else
+                {
+                    std::cout << "Voxel count mismatch.\n";
+                    in.close();
+                }
+            }
+            else
+            {
+                std::cout << "Failed to load grid.\n";
+            }
+        }
 
         ImGui::End();
-
-
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -344,8 +439,8 @@ void renderMesh(Simulation& simulation) {
 
         if (!pause) {
             auto t1 = Clock::now();
-            if (frame <= duration && frame % waitTime == 0) {
-                simulation.uploadParticles(count, halfAngle, particleType, energy);
+            if (waitTime > 0 && frame <= duration && frame % waitTime == 0) {
+                simulation.uploadParticles(count, halfAngle, particleType, deposit, energy);
             }
             simulation.tick(gridData, typesOfVoxels, typesOfParticles);
             frame++;
@@ -354,7 +449,7 @@ void renderMesh(Simulation& simulation) {
         }
 
         if (draw) {
-            if (frame % 10 == 0) {
+            if (draw && frame % 10 == 0) {
                 mesh.buildMesh();
             }
             mesh.draw();
@@ -369,8 +464,8 @@ void renderMesh(Simulation& simulation) {
         if (frame == duration + 1) {
             cout << "\n======================================\n";
             cout << "Time Per Frame: " << tickTime / (duration + 1) << "\n\n";
-            v = simulation.grid.voxels;
             simulation.downloadVoxels();
+            v = simulation.grid.voxels;
             measure.measure(simulation.grid, Settings::X / 2, 0, Settings::Z / 2, 0, 1, 0);
             for (int i = 0;i < measure.ZYPlane.size();i++) {
                 if (i % 10 == 0) cout << endl;

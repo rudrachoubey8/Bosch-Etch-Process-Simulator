@@ -284,7 +284,7 @@ void Simulation::bindBuffers(){
 
 }
 
-void Simulation::uploadParticles(int n, float halfAngle, int particleType, float energy) {
+void Simulation::uploadParticles(int n, float halfAngle, int particleType, bool deposit, float energy) {
 
     constexpr float pi = 3.1415926f;
     float random = Math::randomFloat(100);
@@ -294,6 +294,7 @@ void Simulation::uploadParticles(int n, float halfAngle, int particleType, float
     glUniform1ui(glGetUniformLocation(initParticlesProgram, "startIndex"), getParticleCount());
     glUniform1ui(glGetUniformLocation(initParticlesProgram, "particleCount"), n);
     glUniform1i(glGetUniformLocation(initParticlesProgram, "type"), particleType);
+    glUniform1i(glGetUniformLocation(initParticlesProgram, "deposit"), deposit);
     glUniform1f(glGetUniformLocation(initParticlesProgram, "energy"), energy);
     
     glUniform1f(glGetUniformLocation(initParticlesProgram, "cosTheta"), cosTheta);

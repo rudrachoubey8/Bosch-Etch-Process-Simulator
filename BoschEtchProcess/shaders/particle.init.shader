@@ -22,6 +22,7 @@ layout(std430, binding = 9) buffer FinalParticlesCount {
 
 uniform uint startIndex;
 uniform uint particleCount;
+uniform int deposit;
 uniform int type;
 
 
@@ -62,7 +63,7 @@ void main()
     float phi = 6.28318530718 * v;
     float r = sqrt(1.0 - y * y);
 
-    particles[index].deposit = 0;
+    particles[index].deposit = deposit;
     particles[index].type = type;
     particles[index].speed = 10.0;
     particles[index].alive = 1;
@@ -73,7 +74,7 @@ void main()
     particles[index].dz = r * sin(phi);
 
     particles[index].x = rand01(id * 3 + uint(seed)) * X;
-    particles[index].y = 145.0;
+    particles[index].y = 290.0;
     particles[index].z = rand01(id * 4 + uint(seed)) * Z;
     if(id == 0)
     {
