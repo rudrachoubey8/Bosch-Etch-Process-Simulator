@@ -29,5 +29,6 @@ private:
     GLuint computeProgram = 0;
     GLuint axesProgram = 0;
     GLuint renderProgram = 0;
+    GLuint maskSSBO = 0;
 
 };

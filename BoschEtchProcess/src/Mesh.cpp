@@ -71,6 +71,15 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
+    // mesh SSBO
+    glGenBuffers(1, &maskSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, maskSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        grid.X * grid.Y * grid.Z * sizeof(int),
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
 
     // atomic counter
     glGenBuffers(1, &counterSSBO);
@@ -84,6 +93,7 @@ void Mesh::initGPU() {
     );
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 13, maskSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
 
@@ -117,30 +127,37 @@ void Mesh::buildMesh() {
     uint32_t zero = 0;
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
 
-    
-    glUseProgram(computeProgram);
-    glUniform3i(
-        glGetUniformLocation(computeProgram, "gridSize"),
-        grid.X, grid.Y, grid.Z
-    );
+    for (size_t i = 0; i < 6; i++)
+    {
+        glUseProgram(computeProgram);
+        glUniform3i(
+            glGetUniformLocation(computeProgram, "gridSize"),
+            grid.X, grid.Y, grid.Z
+        );
+        glUniform1i(
+            glGetUniformLocation(computeProgram, "direction"),
+            i
+        );
 
-    glDispatchCompute(
-        (grid.X + 7) / 8,
-        (grid.Y + 7) / 8,
-        (grid.Z + 7) / 8
-    );
+        glDispatchCompute(
+            (grid.X + 7) / 8,
+            (grid.Y + 7) / 8,
+            (grid.Z + 7) / 8
+        );
 
 
-    glMemoryBarrier(
-        GL_SHADER_STORAGE_BARRIER_BIT |
-        GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
-    );
+        glMemoryBarrier(
+            GL_SHADER_STORAGE_BARRIER_BIT |
+            GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+        );
+
+    }
 
 
     glUseProgram(axesProgram);
     glUniform3i(
         glGetUniformLocation(axesProgram, "gridSize"),
-        grid.X, grid.Y, grid.Z
+        grid.X/10, grid.Y, grid.Z/10
     );
     glUniform1i(
         glGetUniformLocation(axesProgram, "size"),

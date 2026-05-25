@@ -89,6 +89,8 @@ void Simulation::tick(std::vector<float> gridData, int typesOfVoxels, int typesO
 {
     bindBuffers();
 
+
+
     dispatchRayMarch(rayMarchProgram, getParticleCount(), gridData, typesOfVoxels, typesOfParticles);
     dispatchHits(resolveHitsProgram);
 }
@@ -104,10 +106,10 @@ void Simulation::dispatchRayMarch(GLuint program, int particleCount, std::vector
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, reactionProbabilitiesSSBO);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(float) * gridData.size(), gridData.data());
 
-
     glUniform1f(glGetUniformLocation(program, "voxelSize"), voxelSize);
     glUniform1i(glGetUniformLocation(program, "maxSteps"), MAX_STEPS);
     glUniform3i(glGetUniformLocation(program, "gridSize"), grid.X, grid.Y, grid.Z);
+
     glUniform1i(glGetUniformLocation(program, "particleCount"), particleCount);
     glUniform1i(glGetUniformLocation(program, "typesOfVoxels"), typesOfVoxels);
     glUniform1i(glGetUniformLocation(program, "typesOfParticles"), typesOfParticles);
@@ -162,7 +164,6 @@ std::vector<HitEvent> Simulation::downloadHits() {
 
 
 void Simulation::downloadVoxels() {
-
     
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
     glGetBufferSubData(
@@ -219,6 +220,7 @@ void Simulation::createBuffers() {
         nullptr,
         GL_DYNAMIC_DRAW
     );
+
 
     glGenBuffers(1, &hitSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, hitSSBO);

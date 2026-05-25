@@ -115,8 +115,8 @@ void renderMesh(Simulation& simulation) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    const int width = 1280;
-    const int height = 720;
+    const int width = 1920;
+    const int height = 1080;
 
     GLFWwindow* window =
         glfwCreateWindow(width, height, "Bosch Etch Mesh", nullptr, nullptr);
@@ -163,7 +163,7 @@ void renderMesh(Simulation& simulation) {
 
     float Transform[16] = {
         1, 0,  0, -Settings::X / 2,
-        0, 1, 0, -Settings::Y / 2,
+        0, 1,  0, -Settings::Y / 2,
         0, 0,  1, -Settings::Z / 2,
         0, 0,  0, 1
     };
@@ -204,7 +204,6 @@ void renderMesh(Simulation& simulation) {
     bool draw = 1;
     bool deposit = 0;
     bool ion = 0;
-
 
     // Initialize Measurment function
     Measure measure;
@@ -282,18 +281,18 @@ void renderMesh(Simulation& simulation) {
 
         ImGui::End();
 
-        //
-        // ========================= PROBABILITY WINDOW =========================
-        //
+        
+        // ========================= PROBABILITY WINDOW ========================= //
+        
         ImGui::Begin("Probability Grid");
 
         RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData);
 
         ImGui::End();
 
-        //
-        // ========================= VOXEL WINDOW =========================
-        //
+        
+        // ========================= VOXEL WINDOW ========================= //
+        
         ImGui::Begin("Voxel Editor");
 
         ImGui::Text("Voxel Settings");
@@ -332,9 +331,9 @@ void renderMesh(Simulation& simulation) {
         }
 
         ImGui::End();
-        //
-        // ========================= GRID FILE WINDOW =========================
-        //
+        
+        // ========================= GRID FILE WINDOW ========================= //
+        
         ImGui::Begin("Grid Save/Load");
 
         ImGui::InputText("Filename", gridFilename, IM_ARRAYSIZE(gridFilename));
