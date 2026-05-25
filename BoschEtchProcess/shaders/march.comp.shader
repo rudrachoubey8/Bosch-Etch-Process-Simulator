@@ -193,10 +193,35 @@ void main()
                     p.type +
                     v.type * typesOfParticles
                 ];
+            float depositChance =
+                reactionData[
+                    p.type +
+                    v.type * typesOfParticles +
+                    typesOfParticles * typesOfVoxels * 1
+                ];
+            float adsorbChance =
+                reactionData[
+                    p.type +
+                    v.type * typesOfParticles +
+                    typesOfParticles * typesOfVoxels * 2
+                ];
+
 
             bool reflectParticle =
                 (h / 4294967295.0f)
                 < (1.0 - reactionChance);
+            bool depositParticle = 
+                (h / 4294967295.0f)
+                < (depositChance);
+            bool adsorbParticle = 
+                (h / 4294967295.0f)
+                < (adsorbChance);
+
+            if(adsorbParticle) {
+                p.alive = 0;
+                break;
+            }
+
 
             if(reflectParticle)
             {
@@ -268,7 +293,7 @@ void main()
 
             if(writeIdx < MAX_HITS)
             {
-                if(p.deposit == 0)
+                if(!depositParticle)
                 {
                     hits[writeIdx].cx =
                         cell.x;

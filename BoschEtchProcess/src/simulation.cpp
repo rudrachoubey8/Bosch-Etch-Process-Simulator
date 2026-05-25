@@ -236,7 +236,7 @@ void Simulation::createBuffers() {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, reactionProbabilitiesSSBO);
     glBufferData(
         GL_SHADER_STORAGE_BUFFER,
-        sizeof(float) * 9,
+        sizeof(float) * 100,
         nullptr,
         GL_DYNAMIC_DRAW
     );

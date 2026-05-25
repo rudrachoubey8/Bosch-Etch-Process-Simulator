@@ -50,4 +50,4 @@ private:
 
     int index(int x, int y, int z);
 };
-void RenderDynamicInputGrid(int& numCols, int& numRows, std::vector<float>& gridData);
+void RenderDynamicInputGrid(int& numCols, int& numRows, std::vector<float>& gridData, int offset);

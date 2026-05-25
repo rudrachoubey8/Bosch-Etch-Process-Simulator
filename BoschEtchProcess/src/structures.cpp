@@ -15,9 +15,8 @@ bool Grid::inBounds(int x, int y, int z) {
     return (x < X && y < Y && z < Z && x >= 0 && y >= 0 && z >= 0);
 }
 
-void RenderDynamicInputGrid(int& numCols, int& numRows, std::vector<float>& gridData)
+void RenderDynamicInputGrid(int& numCols, int& numRows, std::vector<float>& gridData, int offset)
 {
-
     ImGui::Text("Grid Dimensions:");
     bool resized = false;
 
@@ -36,7 +35,7 @@ void RenderDynamicInputGrid(int& numCols, int& numRows, std::vector<float>& grid
 
     if (resized) {
         size_t oldSize = gridData.size();
-        size_t newSize = static_cast<size_t>(numRows * numCols);
+        size_t newSize = static_cast<size_t>(numRows * numCols) * 3;
 
         gridData.resize(newSize);
 
@@ -75,11 +74,11 @@ void RenderDynamicInputGrid(int& numCols, int& numRows, std::vector<float>& grid
             {
                 ImGui::TableSetColumnIndex(c + 1);
 
-                ImGui::PushID(r * 1000 + c);
+                ImGui::PushID(r * 1000 + c + offset * numCols * numRows);
 
                 ImGui::PushItemWidth(-FLT_MIN); 
 
-                ImGui::InputFloat("##cell_input", &gridData[r * numCols + c], 0, 0);
+                ImGui::InputFloat("##cell_input", &gridData[r * numCols + c + offset * numCols * numRows], 0, 0);
 
                 ImGui::PopItemWidth();
                 ImGui::PopID();

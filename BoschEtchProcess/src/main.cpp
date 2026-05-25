@@ -178,8 +178,7 @@ void renderMesh(Simulation& simulation) {
         glGetUniformLocation(shader.shaderProgram, "Transform"),
         1, GL_TRUE, Transform
     );
-
-    vector<float> gridData = {0,0,0,0,0,0,0,0,0};
+    
 
     // Inititalize Mesh 
     Mesh mesh(simulation.grid);
@@ -227,10 +226,10 @@ void renderMesh(Simulation& simulation) {
     int typesOfVoxels = 3;
     int typesOfParticles = 3;
 
+    vector<float> gridData(typesOfParticles * typesOfVoxels * 3, 0.0f);
+
     static char gridFilename[256] = "grid.dat";
     simulation.tick(gridData, typesOfVoxels, typesOfParticles);
-
-
 
 
     IMGUI_CHECKVERSION();
@@ -284,10 +283,20 @@ void renderMesh(Simulation& simulation) {
         
         // ========================= PROBABILITY WINDOW ========================= //
         
-        ImGui::Begin("Probability Grid");
+        ImGui::Begin("Reaction Probability Grid");
+        RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData, 0);
+        ImGui::End();
 
-        RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData);
+        // ========================= DEPOSIT WINDOW ========================= //
 
+        ImGui::Begin("Deposit Probability Grid");
+        RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData, 1);
+        ImGui::End();
+
+        // ========================= ADSORB WINDOW ========================= //
+
+        ImGui::Begin("Adsorb Probability Grid");
+        RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData, 2);
         ImGui::End();
 
         
