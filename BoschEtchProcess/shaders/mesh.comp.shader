@@ -30,6 +30,8 @@ layout(std430, binding = 2) buffer Counter {
 
 uniform ivec3 gridSize;
 uniform int direction;
+uniform ivec3 offset;
+uniform int chunkSize;
 
 int idx(int x,int y,int z)
 {
@@ -150,7 +152,7 @@ bool mergeable(
 
 void main()
 {
-    ivec3 p = ivec3(gl_GlobalInvocationID);
+    ivec3 p = ivec3(gl_GlobalInvocationID) + offset * chunkSize;
 
     if(!inBounds(p.x,p.y,p.z))
         return;

@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <imgui.h>
 #include <string>
+
+
 struct Voxel {
     float threshold;
     float depositThreshold;
@@ -44,7 +46,6 @@ public:
 
     Voxel& at(int x, int y, int z);
     bool inBounds(int x, int y, int z);
-
 
 private:
 

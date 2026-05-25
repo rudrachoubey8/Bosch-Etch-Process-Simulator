@@ -18,9 +18,11 @@ public:
     void setRenderingProgram(GLuint program);
     void setVoxelBuffer(GLuint ssbo);
     uint32_t vertCount = 0;
-
+    int chunkSize = 32;
+    int offsetX = 0; int offsetY = 0; int offsetZ = 0;
 private:
     Grid& grid;
+
 
     GLuint voxelSSBO = 0;
     GLuint vertexSSBO = 0;

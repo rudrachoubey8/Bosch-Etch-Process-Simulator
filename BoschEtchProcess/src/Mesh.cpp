@@ -43,7 +43,6 @@ static GLuint loadComputeProgram(const char* path) {
 Mesh::Mesh(Grid& g) : grid(g) {}
 
 Mesh::~Mesh() {
-    glDeleteBuffers(1, &voxelSSBO);
     glDeleteBuffers(1, &vertexSSBO);
     glDeleteBuffers(1, &counterSSBO);
     glDeleteVertexArrays(1, &vao);
@@ -52,6 +51,11 @@ Mesh::~Mesh() {
 
 void Mesh::setRenderingProgram(GLuint shaderProgram) {
     renderProgram = shaderProgram;
+    std::string path = "shaders/mesh.comp.shader";
+    computeProgram = loadComputeProgram(path.c_str());
+
+    path = "shaders/axes.shader";
+    axesProgram = loadComputeProgram(path.c_str());
 }
 
 void Mesh::setVoxelBuffer(GLuint ssbo){
@@ -59,7 +63,7 @@ void Mesh::setVoxelBuffer(GLuint ssbo){
 }
 
 void Mesh::initGPU() {
-    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 6;
+    const size_t MAX_VERTS = chunkSize * chunkSize * chunkSize * 36;
 
     // vertex SSBO
     glGenBuffers(1, &vertexSSBO);
@@ -71,16 +75,7 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
-    // mesh SSBO
-    glGenBuffers(1, &maskSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, maskSSBO);
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        grid.X * grid.Y * grid.Z * sizeof(int),
-        nullptr,
-        GL_DYNAMIC_DRAW
-    );
-
+    
     // atomic counter
     glGenBuffers(1, &counterSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
@@ -93,7 +88,6 @@ void Mesh::initGPU() {
     );
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 13, maskSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
 
@@ -114,11 +108,6 @@ void Mesh::initGPU() {
     glEnableVertexAttribArray(2);
 
     // shaders
-    std::string path = "shaders/mesh.comp.shader";
-    computeProgram = loadComputeProgram(path.c_str());
-
-    path = "shaders/axes.shader";
-    axesProgram = loadComputeProgram(path.c_str());
 
 }
 void Mesh::buildMesh() {
@@ -138,11 +127,13 @@ void Mesh::buildMesh() {
             glGetUniformLocation(computeProgram, "direction"),
             i
         );
+        glUniform3i(glGetUniformLocation(computeProgram, "offset"), offsetX, offsetY, offsetZ);
+        glUniform1i(glGetUniformLocation(computeProgram, "chunkSize"), chunkSize);
 
         glDispatchCompute(
-            (grid.X + 7) / 8,
-            (grid.Y + 7) / 8,
-            (grid.Z + 7) / 8
+            (chunkSize + 7) / 8,
+            (chunkSize + 7) / 8,
+            (chunkSize + 7) / 8
         );
 
 
@@ -154,20 +145,6 @@ void Mesh::buildMesh() {
     }
 
 
-    glUseProgram(axesProgram);
-    glUniform3i(
-        glGetUniformLocation(axesProgram, "gridSize"),
-        grid.X/10, grid.Y, grid.Z/10
-    );
-    glUniform1i(
-        glGetUniformLocation(axesProgram, "size"),
-        20
-    );
-    glDispatchCompute(
-        (grid.X + 7) / 8,
-        (1 + 7) / 8,
-        (grid.Z + 7) / 8
-    );
 
 
     glMemoryBarrier(

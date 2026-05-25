@@ -115,6 +115,8 @@ void renderMesh(Simulation& simulation) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+    vector<unique_ptr<Mesh>> meshes;
+
     const int width = 1920;
     const int height = 1080;
 
@@ -183,16 +185,43 @@ void renderMesh(Simulation& simulation) {
     // Inititalize Mesh 
     Mesh mesh(simulation.grid);
 
-    mesh.setRenderingProgram(shader.shaderProgram);
-
     simulation.createBuffers();
     simulation.uploadVoxels(simulation.grid.voxels);
 
-    mesh.initGPU();
     vector<Voxel> v = simulation.grid.voxels;
-    
-    mesh.setVoxelBuffer(simulation.voxelSSBO);
-    mesh.buildMesh();
+
+    int chunkSize = 32;
+
+    for (size_t x = 0; x < (simulation.grid.X + chunkSize - 1) / chunkSize; x++)
+    {
+        for (size_t y = 0; y < (simulation.grid.Y + chunkSize - 1) / chunkSize; y++)
+        {
+            for (size_t z = 0; z < (simulation.grid.Z + chunkSize - 1) / chunkSize; z++)
+            {
+                auto m = std::make_unique<Mesh>(simulation.grid);
+
+                m->setRenderingProgram(shader.shaderProgram);
+                m->setVoxelBuffer(simulation.voxelSSBO);
+
+                m->offsetX = x;
+                m->offsetY = y;
+                m->offsetZ = z;
+                m->chunkSize = chunkSize;
+
+                m->initGPU();
+
+                meshes.push_back(std::move(m));
+            }
+        }
+
+    }
+
+
+    for (auto& m : meshes) {
+            m->buildMesh();
+       
+        m->draw();
+    }
 
     int frame = 0;
     int count = 1e4;
@@ -392,9 +421,6 @@ void renderMesh(Simulation& simulation) {
 
                     simulation.uploadVoxels(simulation.grid.voxels);
 
-                    mesh.initGPU();
-                    mesh.setVoxelBuffer(simulation.voxelSSBO);
-                    mesh.buildMesh();
 
                     std::cout << "Loaded grid from: " << gridFilename << std::endl;
                 }
@@ -456,11 +482,11 @@ void renderMesh(Simulation& simulation) {
             tickTime += ms(t2 - t1).count();
         }
 
-        if (draw) {
-            if (draw && frame % 10 == 0) {
-                mesh.buildMesh();
+        if (draw && frame % 10 == 0) {
+            for (auto& m : meshes) {
+                    m->buildMesh();
+                m->draw();
             }
-            mesh.draw();
         }
 
         ImGui::Render();
