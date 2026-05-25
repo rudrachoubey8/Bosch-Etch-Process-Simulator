@@ -144,13 +144,6 @@ void Mesh::buildMesh() {
 
     }
 
-
-
-
-    glMemoryBarrier(
-        GL_SHADER_STORAGE_BARRIER_BIT |
-        GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
-    );
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
     glGetBufferSubData(
         GL_SHADER_STORAGE_BUFFER,

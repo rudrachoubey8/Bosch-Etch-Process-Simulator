@@ -218,8 +218,7 @@ void renderMesh(Simulation& simulation) {
 
 
     for (auto& m : meshes) {
-            m->buildMesh();
-       
+        m->buildMesh();
         m->draw();
     }
 
@@ -482,9 +481,19 @@ void renderMesh(Simulation& simulation) {
             tickTime += ms(t2 - t1).count();
         }
 
-        if (draw && frame % 10 == 0) {
-            for (auto& m : meshes) {
+        if (draw)
+        {
+            // rebuild only every 10 frames
+            if (frame % 10 == 0)
+            {
+                for (auto& m : meshes)
+                {
                     m->buildMesh();
+                }
+            }
+
+            for (auto& m : meshes)
+            {
                 m->draw();
             }
         }
