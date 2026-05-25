@@ -63,7 +63,7 @@ void Mesh::setVoxelBuffer(GLuint ssbo){
 }
 
 void Mesh::initGPU() {
-    const size_t MAX_VERTS = chunkSize * chunkSize * chunkSize * 36;
+    const size_t MAX_VERTS = chunkSize * chunkSize * chunkSize;
 
     // vertex SSBO
     glGenBuffers(1, &vertexSSBO);
@@ -111,6 +111,9 @@ void Mesh::initGPU() {
 
 }
 void Mesh::buildMesh() {
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
     vertCount = 0;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
     uint32_t zero = 0;
