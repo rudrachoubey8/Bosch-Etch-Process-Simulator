@@ -140,7 +140,7 @@ void renderMesh(Simulation& simulation) {
     );
 
     glEnable(GL_DEPTH_TEST);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     Shader shader(
         "shaders/vertex.shader",
@@ -303,19 +303,19 @@ void renderMesh(Simulation& simulation) {
         // ========================= PROBABILITY WINDOW ========================= //
         
         ImGui::Begin("Reaction Probability Grid");
-        RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData, 0);
+        RenderDynamicInputGrid(typesOfParticles, typesOfVoxels, gridData, 0);
         ImGui::End();
 
         // ========================= DEPOSIT WINDOW ========================= //
 
         ImGui::Begin("Deposit Probability Grid");
-        RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData, 1);
+        RenderDynamicInputGrid(typesOfParticles, typesOfVoxels, gridData, 1);
         ImGui::End();
 
         // ========================= ADSORB WINDOW ========================= //
 
         ImGui::Begin("Adsorb Probability Grid");
-        RenderDynamicInputGrid(typesOfVoxels, typesOfParticles, gridData, 2);
+        RenderDynamicInputGrid(typesOfParticles, typesOfVoxels, gridData, 2);
         ImGui::End();
 
         
