@@ -195,13 +195,10 @@ void renderMesh(Simulation& simulation) {
     mesh.buildMesh();
 
     int frame = 0;
-    int count = 1e4;
-    int particleType = 0;
     double tickTime = 0;
 
     bool pause = 1;
     bool draw = 1;
-    bool deposit = 0;
     bool ion = 0;
 
     // Initialize Measurment function
@@ -213,8 +210,6 @@ void renderMesh(Simulation& simulation) {
     int voxelType = 1;
     int solid = 1;
     
-    float energy = 1.0f;
-    float halfAngle = 90;
 
     int x0 = 0, x1 = 0;
     int y0 = 0, y1 = 0;
@@ -224,7 +219,11 @@ void renderMesh(Simulation& simulation) {
     float voxelDepositThreshold = 500;
 
     int typesOfVoxels = 3;
-    int typesOfParticles = 3;
+    
+    int selectedParticleType = 0;
+    int typesOfParticles = 4;
+
+    std::vector<ParticleTypeData> particleTypes(typesOfParticles);
 
     vector<float> gridData(typesOfParticles * typesOfVoxels * 3, 0.0f);
 
@@ -253,18 +252,38 @@ void renderMesh(Simulation& simulation) {
         //
         ImGui::Begin("Particle Controls");
 
+        ImGui::InputInt("Particle Types", &typesOfParticles);
+
+        if (typesOfParticles < 1)
+            typesOfParticles = 1;
+
+        if (particleTypes.size() != typesOfParticles)
+        {
+            particleTypes.resize(typesOfParticles);
+        }
+
         ImGui::SliderInt("Duration", &duration, 0, 10000);
         ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
 
-        ImGui::InputInt("Particle Count", &count);
-        ImGui::InputFloat("Particle Energy", &energy);
-        ImGui::InputFloat("Half Angle (Deg)", &halfAngle);
+        ImGui::SliderInt(
+            "Selected Particle Type",
+            &selectedParticleType,
+            0,
+            typesOfParticles - 1
+        );
+
+        ParticleTypeData& p =
+            particleTypes[selectedParticleType];
+
+        ImGui::InputInt("Particle Count", &p.count);
+        ImGui::InputFloat("Particle Energy", &p.energy);
+        ImGui::InputFloat("Half Angle", &p.halfAngle);
+
+        ImGui::Checkbox("Deposit", &p.deposit);
 
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
-        ImGui::Checkbox("Deposit", &deposit);
 
-        ImGui::InputInt("Type", &particleType);
 
         if (ImGui::Button("Reset"))
         {
@@ -444,18 +463,65 @@ void renderMesh(Simulation& simulation) {
             1, GL_TRUE, Size
         );
 
+        static auto previousTime = Clock::now();
 
-        if (!pause) {
-            auto t1 = Clock::now();
-            if (waitTime > 0 && frame <= duration && frame % waitTime == 0) {
-                simulation.uploadParticles(count, halfAngle, particleType, deposit, energy);
+        static double accumulator = 0.0;
+
+        const double fixedDelta = 1.0 / 240.0;
+
+        auto currentTime = Clock::now();
+
+        double deltaTime =
+            std::chrono::duration<double>(
+                currentTime - previousTime
+            ).count();
+
+        previousTime = currentTime;
+
+        accumulator += deltaTime;
+
+        while (accumulator >= fixedDelta)
+        {
+            if (!pause)
+            {
+                auto t1 = Clock::now();
+
+                if (
+                    waitTime > 0 &&
+                    frame <= duration &&
+                    frame % waitTime == 0
+                    )
+                {
+                    for (int i = 0; i < particleTypes.size(); i++)
+                    {
+                        ParticleTypeData& p =
+                            particleTypes[i];
+
+                        simulation.uploadParticles(
+                            p.count,
+                            p.halfAngle,
+                            i,
+                            p.deposit,
+                            p.energy
+                        );
+                    }
+                }
+
+                simulation.tick(
+                    gridData,
+                    typesOfVoxels,
+                    typesOfParticles
+                );
+
+                frame++;
+
+                auto t2 = Clock::now();
+
+                tickTime += ms(t2 - t1).count();
             }
-            simulation.tick(gridData, typesOfVoxels, typesOfParticles);
-            frame++;
-            auto t2 = Clock::now();
-            tickTime += ms(t2 - t1).count();
-        }
 
+            accumulator -= fixedDelta;
+        }
         if (draw) {
             if (draw && frame % 10 == 0) {
                 mesh.buildMesh();

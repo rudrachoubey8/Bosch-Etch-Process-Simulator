@@ -10,7 +10,15 @@ struct Voxel {
     int solid;
     int type;
 };
+struct ParticleTypeData
+{
+    int count = 1000;
+    float energy = 100.0f;
+    float halfAngle = 20.0f;
 
+    bool deposit = false;
+    bool draw = true;
+};
 struct Particle {
     int alive = 1;
     float x = 0,y = 0,z = 0;
