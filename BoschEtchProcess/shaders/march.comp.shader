@@ -356,7 +356,6 @@ void main()
                     hits[writeIdx].damage = energy;
                     hits[writeIdx].flags = 0u;
 
-                    markChunkDirty(cell);
                 }
                 else
                 {
@@ -369,7 +368,6 @@ void main()
                     hits[writeIdx].damage = energy;
                     hits[writeIdx].flags = 1u;
 
-                    markChunkDirty(neighbor);
                 }
             }
 

@@ -54,8 +54,8 @@ void Mesh::setRenderingProgram(GLuint shaderProgram) {
     renderProgram = shaderProgram;
 }
 
-void Mesh::setVoxelBuffer(GLuint ssbo){
-    voxelSSBO = ssbo;
+void Mesh::setChunkSSBO(GLuint ssbo){
+    chunkSSBO = ssbo;
 }
 
 void Mesh::initGPU() {
@@ -83,17 +83,7 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
-    // atomic counter
-    glGenBuffers(1, &chunkSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
-    uint32_t zero = 0;
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        sizeof(uint32_t),
-        &zero,
-        GL_DYNAMIC_DRAW
-    );
-
+    
 
     glGenBuffers(1, &voxelCountSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
@@ -105,7 +95,7 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, chunkSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 14, voxelCountSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
