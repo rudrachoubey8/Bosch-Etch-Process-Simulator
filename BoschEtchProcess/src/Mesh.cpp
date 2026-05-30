@@ -83,6 +83,18 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
+    // atomic counter
+    glGenBuffers(1, &chunkSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
+    uint32_t zero = 0;
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(uint32_t),
+        &zero,
+        GL_DYNAMIC_DRAW
+    );
+
+
     glGenBuffers(1, &voxelCountSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
     uint32_t zero2 = 0;
@@ -167,7 +179,6 @@ void Mesh::buildMesh() {
         (1 + 7) / 8,
         (grid.Z + 7) / 8
     );
-
 
     glMemoryBarrier(
         GL_SHADER_STORAGE_BARRIER_BIT |

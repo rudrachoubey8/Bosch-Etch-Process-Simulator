@@ -95,6 +95,42 @@ void Simulation::tick(std::vector<float> gridData, int typesOfVoxels, int typesO
     dispatchHits(resolveHitsProgram);
 }
 
+void Simulation::chunk() {
+
+    int numChunkX = (X + chunkSize - 1) / chunkSize;
+    int numChunkY = (Y + chunkSize - 1) / chunkSize;
+    int numChunkZ = (Z + chunkSize - 1) / chunkSize;
+
+    chunks.resize(numChunkX * numChunkY * numChunkZ);
+    
+    for (int x = 0; x < X; x++){
+        for (int y = 0;y < Y;y++) {
+            for (int z = 0; z < Z; z++)
+            {
+                int chunkX = x / chunkSize;
+                int chunkY = y / chunkSize;
+                int chunkZ = z / chunkSize;
+
+                int voxelX = x % chunkSize;
+                int voxelY = y % chunkSize;
+                int voxelZ = z % chunkSize;
+
+
+                int index = chunkX + chunkY * numChunkX + chunkZ * numChunkX * numChunkY;
+
+                
+                chunks[index].chunkX = chunkX;
+                chunks[index].chunkY = chunkY;
+                chunks[index].chunkZ = chunkZ;
+
+                chunks[index].voxels[voxelX + voxelY * chunkSize + voxelZ * chunkSize * chunkSize] = grid.at(x, y, z);
+            }
+        }
+    }
+
+}
+
+
 void Simulation::setVoxel(int x, int y, int z, Voxel v) {
     grid.at(x, y, z) = v;
 }
@@ -163,14 +199,14 @@ std::vector<HitEvent> Simulation::downloadHits() {
 }
 
 
-void Simulation::downloadVoxels() {
+void Simulation::downloadChunks() {
     
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
     glGetBufferSubData(
         GL_SHADER_STORAGE_BUFFER,
         0,
-        Settings::X * Settings::Y * Settings::Z * sizeof(Voxel),
-        grid.voxels.data()
+        chunks.size() * sizeof(Chunk),
+        chunks.data()
     );
 
 }
@@ -212,8 +248,8 @@ void Simulation::createBuffers() {
         GL_DYNAMIC_DRAW
     );
 
-    glGenBuffers(1, &voxelSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+    glGenBuffers(1, &chunkSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
     glBufferData(
         GL_SHADER_STORAGE_BUFFER,
         sizeof(Voxel) * grid.X * grid.Y * grid.Z,
@@ -276,7 +312,7 @@ void Simulation::createBuffers() {
 void Simulation::bindBuffers(){
     
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, particleSSBO);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, chunkSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, hitSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 15, reactionProbabilitiesSSBO);
 
@@ -310,14 +346,17 @@ void Simulation::uploadParticles(ParticleTypeData p, int particleType) {
 
 }
 
-void Simulation::uploadVoxels(std::vector<Voxel>& voxels) {
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+void Simulation::uploadChunks(std::vector<Chunk>& chunks) {
+
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
     glBufferSubData(
         GL_SHADER_STORAGE_BUFFER,
         0,
-        voxels.size() * sizeof(Voxel),
-        voxels.data()
+        chunks.size() * sizeof(Chunk),
+        chunks.data()
     );
+
 }
 
 void Simulation::reset() {
@@ -351,7 +390,6 @@ void Simulation::dispatchHits(GLuint program) {
     glUniform3i(glGetUniformLocation(program, "gridSize"), grid.X, grid.Y, grid.Z);
 
     int groups = (hitCount + 255) / 256;
-
     glDispatchCompute(groups, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }

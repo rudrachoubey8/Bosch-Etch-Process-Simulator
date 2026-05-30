@@ -8,10 +8,14 @@ class Simulation {
 public:
 
 	int X, Y, Z;
+	
 	float voxelSize;
 	Grid grid;
+
 	std::vector<Particle> particles;
-	GLuint voxelSSBO = 0;
+	std::vector<Chunk> chunks;
+
+	GLuint chunkSSBO = 0;
 
 	Simulation(int X, int Y, int Z, float voxelSize);
 
@@ -24,13 +28,16 @@ public:
 
 	void createBuffers();
 	void bindBuffers();
+
+	void chunk();
+
 	void uploadParticles(ParticleTypeData p, int type);
-	void uploadVoxels(std::vector<Voxel>& voxels);
+	void uploadChunks(std::vector<Chunk>& chunks);
 	void dispatchRayMarch(GLuint program, int particleCount, std::vector<float> gridData, int typesOfVoxels, int typesOfParticles);
 	void dispatchHits(GLuint program);
 
 	std::vector<HitEvent> downloadHits();
-	void downloadVoxels();
+	void downloadChunks();
 	void reset();
 	int getParticleCount();
 	

@@ -186,12 +186,14 @@ void renderMesh(Simulation& simulation) {
     mesh.setRenderingProgram(shader.shaderProgram);
 
     simulation.createBuffers();
-    simulation.uploadVoxels(simulation.grid.voxels);
+    simulation.chunk();
+
+    simulation.uploadChunks(simulation.chunks);
 
     mesh.initGPU();
     vector<Voxel> v = simulation.grid.voxels;
     
-    mesh.setVoxelBuffer(simulation.voxelSSBO);
+    mesh.setChunkSSBO(simulation.chunkSSBO);
     mesh.buildMesh();
 
     int frame = 0;
@@ -291,10 +293,10 @@ void renderMesh(Simulation& simulation) {
             frame = 0;
             tickTime = 0;
 
-            simulation.uploadVoxels(v);
+            //simulation.uploadChunks(v);
 
             mesh.initGPU();
-            mesh.setVoxelBuffer(simulation.voxelSSBO);
+            mesh.setChunkSSBO(simulation.chunkSSBO);
             mesh.buildMesh();
         }
 
@@ -319,48 +321,6 @@ void renderMesh(Simulation& simulation) {
         RenderDynamicInputGrid(typesOfParticles, typesOfVoxels, gridData, 2);
         ImGui::End();
 
-        
-        // ========================= VOXEL WINDOW ========================= //
-        
-        ImGui::Begin("Voxel Editor");
-
-        ImGui::Text("Voxel Settings");
-
-        ImGui::SliderInt("Voxel Type", &voxelType, 1, 3);
-        ImGui::InputFloat("Threshold", &voxelThreshold);
-        ImGui::InputFloat("Deposit Threshold", &voxelDepositThreshold);
-        ImGui::SliderInt("Solid", &solid, 0, 1);
-
-        ImGui::Separator();
-
-        ImGui::Text("Fill Region");
-
-        ImGui::InputInt("x0", &x0);
-        ImGui::InputInt("x1", &x1);
-
-        ImGui::InputInt("y0", &y0);
-        ImGui::InputInt("y1", &y1);
-
-        ImGui::InputInt("z0", &z0);
-        ImGui::InputInt("z1", &z1);
-
-        if (ImGui::Button("Fill"))
-        {
-            Voxel voxel{};
-
-            voxel.solid = solid;
-            voxel.type = voxelType;
-            voxel.threshold = voxelThreshold;
-            voxel.depositThreshold = voxelDepositThreshold;
-
-            simulation.initRectangle(voxel, x0, y0, z0, x1, y1, z1);
-
-            v = simulation.grid.voxels;
-            simulation.uploadVoxels(v);
-        }
-
-        ImGui::End();
-        
         // ========================= GRID FILE WINDOW ========================= //
         
         ImGui::Begin("Grid Save/Load");
@@ -404,16 +364,16 @@ void renderMesh(Simulation& simulation) {
                 if (voxelCount == simulation.grid.voxels.size())
                 {
                     in.read(
-                        (char*)simulation.grid.voxels.data(),
-                        voxelCount * sizeof(Voxel)
+                        (char*)simulation.chunks.data(),
+                        simulation.chunks.size() * sizeof(Chunk)
                     );
 
                     in.close();
 
-                    simulation.uploadVoxels(simulation.grid.voxels);
+                    simulation.uploadChunks(simulation.chunks);
 
                     mesh.initGPU();
-                    mesh.setVoxelBuffer(simulation.voxelSSBO);
+                    mesh.setChunkSSBO(simulation.chunkSSBO);
                     mesh.buildMesh();
 
                     std::cout << "Loaded grid from: " << gridFilename << std::endl;
@@ -542,27 +502,6 @@ void renderMesh(Simulation& simulation) {
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        if (frame == duration + 1) {
-            cout << "\n======================================\n";
-            cout << "Time Per Frame: " << tickTime / (duration + 1) << "\n\n";
-            simulation.downloadVoxels();
-            v = simulation.grid.voxels;
-            measure.measure(simulation.grid, Settings::X / 2, 0, Settings::Z / 2, 0, 1, 0);
-            for (int i = 0;i < measure.ZYPlane.size();i++) {
-                if (i % 10 == 0) cout << endl;
-                cout << measure.ZYPlane[i] << ", ";
-            }
-
-            std::vector<float> conv = measure.convolve(measure.ZYPlane, 5);
-            int depth = measure.getDepth(conv);
-
-            cout << endl;
-            cout << "Depth: " << depth;
-            cout << endl;
-            cout << "Width: " << measure.getWidth(conv, depth / 2);
-            cout << endl;
-        }
-    }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

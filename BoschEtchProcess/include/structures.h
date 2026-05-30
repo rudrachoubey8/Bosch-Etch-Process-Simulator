@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <imgui.h>
 #include <string>
+
+const int chunkSize = 32;
+
 struct Voxel {
     float threshold;
     float depositThreshold;
@@ -10,6 +13,20 @@ struct Voxel {
     int solid;
     int type;
 };
+
+
+struct Chunk {
+    int chunkX = 0;
+    int chunkY = 0;
+    int chunkZ = 0;
+
+    Voxel voxels[chunkSize * chunkSize * chunkSize];
+    int dirty = 1;
+};
+
+
+
+
 struct ParticleTypeData
 {
     int count = 1000;
