@@ -17,6 +17,8 @@ public:
 
 	GLuint chunkSSBO = 0;
 
+	int numChunkX, numChunkY, numChunkZ;
+
 	Simulation(int X, int Y, int Z, float voxelSize);
 
 
@@ -41,7 +43,9 @@ public:
 	void reset();
 	int getParticleCount();
 	
+
 private:
+
 
 	uint32_t MAX_PARTICLES = 1000000;
 	uint32_t MAX_HITS = 50000;

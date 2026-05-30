@@ -93,27 +93,28 @@ void Simulation::tick(std::vector<float> gridData, int typesOfVoxels, int typesO
 
     dispatchRayMarch(rayMarchProgram, getParticleCount(), gridData, typesOfVoxels, typesOfParticles);
     dispatchHits(resolveHitsProgram);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
 
-    Chunk* chunks =
+    /*glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
+
+    Chunk* c =
         (Chunk*)glMapBuffer(
             GL_SHADER_STORAGE_BUFFER,
             GL_READ_WRITE
         );
 
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < chunks.size(); i++)
     {
-        chunks[i].dirty = 0;
+        c[i].dirty = 0;
     }
 
-    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);*/
 }
 
 void Simulation::chunk() {
 
-    int numChunkX = (X + chunkSize - 1) / chunkSize;
-    int numChunkY = (Y + chunkSize - 1) / chunkSize;
-    int numChunkZ = (Z + chunkSize - 1) / chunkSize;
+    numChunkX = (X + chunkSize - 1) / chunkSize;
+    numChunkY = (Y + chunkSize - 1) / chunkSize;
+    numChunkZ = (Z + chunkSize - 1) / chunkSize;
 
     chunks.resize(numChunkX * numChunkY * numChunkZ);
     
@@ -159,6 +160,7 @@ void Simulation::dispatchRayMarch(GLuint program, int particleCount, std::vector
     glUniform1f(glGetUniformLocation(program, "voxelSize"), voxelSize);
     glUniform1i(glGetUniformLocation(program, "maxSteps"), MAX_STEPS);
     glUniform3i(glGetUniformLocation(program, "gridSize"), grid.X, grid.Y, grid.Z);
+    glUniform3i(glGetUniformLocation(program, "chunkGridSize"), numChunkX, numChunkY, numChunkZ);
 
     glUniform1i(glGetUniformLocation(program, "particleCount"), particleCount);
     glUniform1i(glGetUniformLocation(program, "typesOfVoxels"), typesOfVoxels);
@@ -402,6 +404,7 @@ void Simulation::dispatchHits(GLuint program) {
 
     glUseProgram(program);
     glUniform3i(glGetUniformLocation(program, "gridSize"), grid.X, grid.Y, grid.Z);
+    glUniform3i(glGetUniformLocation(program, "chunkGridSize"), numChunkX, numChunkY, numChunkZ);
 
     int groups = (hitCount + 255) / 256;
     glDispatchCompute(groups, 1, 1);

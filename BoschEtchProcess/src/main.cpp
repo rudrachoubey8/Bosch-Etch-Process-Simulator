@@ -178,7 +178,7 @@ void renderMesh(Simulation& simulation) {
         glGetUniformLocation(shader.shaderProgram, "Transform"),
         1, GL_TRUE, Transform
     );
-    
+
 
     // Inititalize Mesh 
     Mesh mesh(simulation.grid);
@@ -191,7 +191,7 @@ void renderMesh(Simulation& simulation) {
 
     mesh.initGPU();
     vector<Voxel> v = simulation.grid.voxels;
-    
+
     mesh.setChunkSSBO(simulation.chunkSSBO);
     mesh.buildMesh();
 
@@ -204,13 +204,13 @@ void renderMesh(Simulation& simulation) {
 
     // Initialize Measurment function
     Measure measure;
-    
+
     int duration = 3000;
     int waitTime = 10;
 
     int voxelType = 1;
     int solid = 1;
-    
+
 
     int x0 = 0, x1 = 0;
     int y0 = 0, y1 = 0;
@@ -220,7 +220,7 @@ void renderMesh(Simulation& simulation) {
     float voxelDepositThreshold = 500;
 
     int typesOfVoxels = 3;
-    
+
     int selectedParticleType = 0;
     int typesOfParticles = 4;
 
@@ -301,9 +301,9 @@ void renderMesh(Simulation& simulation) {
 
         ImGui::End();
 
-        
+
         // ========================= PROBABILITY WINDOW ========================= //
-        
+
         ImGui::Begin("Reaction Probability Grid");
         RenderDynamicInputGrid(typesOfParticles, typesOfVoxels, gridData, 0);
         ImGui::End();
@@ -321,7 +321,7 @@ void renderMesh(Simulation& simulation) {
         ImGui::End();
 
         // ========================= GRID FILE WINDOW ========================= //
-        
+
         ImGui::Begin("Grid Save/Load");
 
         ImGui::InputText("Filename", gridFilename, IM_ARRAYSIZE(gridFilename));
@@ -360,7 +360,7 @@ void renderMesh(Simulation& simulation) {
 
                 in.read((char*)&chunkCount, sizeof(size_t));
 
-                if (chunkCount == simulation.grid.voxels.size())
+                if (chunkCount == simulation.chunks.size())
                 {
                     in.read(
                         (char*)simulation.chunks.data(),
@@ -458,7 +458,7 @@ void renderMesh(Simulation& simulation) {
                             particleTypes[i];
 
                         simulation.uploadParticles(
-                            p,i
+                            p, i
                         );
                     }
                 }
@@ -501,13 +501,15 @@ void renderMesh(Simulation& simulation) {
         glfwSwapBuffers(window);
         glfwPollEvents();
 
+
+    }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
     glfwTerminate();
-
 }
-
 int main() {
 
     renderMesh(stackSimulation());

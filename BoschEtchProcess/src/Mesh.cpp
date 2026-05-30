@@ -134,24 +134,30 @@ void Mesh::buildMesh() {
     uint32_t zero2 = 0;
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero2);
 
+    int numChunkX = (grid.X + chunkSize - 1) / chunkSize;
+    int numChunkY = (grid.Y + chunkSize - 1) / chunkSize;
+    int numChunkZ = (grid.Z + chunkSize - 1) / chunkSize;
     
-        glUseProgram(computeProgram);
-        glUniform3i(
-            glGetUniformLocation(computeProgram, "gridSize"),
-            grid.X, grid.Y, grid.Z
-        );
+    glUseProgram(computeProgram);
+    glUniform3i(
+        glGetUniformLocation(computeProgram, "gridSize"),
+        grid.X, grid.Y, grid.Z
+    );
+    glUniform3i(
+        glGetUniformLocation(computeProgram, "chunkGridSize"),
+        numChunkX, numChunkY, numChunkZ
+    );
+    glDispatchCompute(
+        (grid.X + 7) / 8,
+        (grid.Y + 7) / 8,
+        (grid.Z + 7) / 8
+    );
 
-        glDispatchCompute(
-            (grid.X + 7) / 8,
-            (grid.Y + 7) / 8,
-            (grid.Z + 7) / 8
-        );
 
-
-        glMemoryBarrier(
-            GL_SHADER_STORAGE_BARRIER_BIT |
-            GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
-        );
+    glMemoryBarrier(
+        GL_SHADER_STORAGE_BARRIER_BIT |
+        GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+    );
 
 
 

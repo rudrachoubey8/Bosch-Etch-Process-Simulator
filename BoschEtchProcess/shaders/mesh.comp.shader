@@ -54,6 +54,8 @@ layout(std430, binding = 2) buffer Counter
 
 uniform ivec3 gridSize;
 uniform ivec3 chunkGridSize;
+
+
 int getChunkIndex(ivec3 worldPos)
 {
     ivec3 chunkCoord = worldPos >> 5;
@@ -113,7 +115,7 @@ int typeAt(int x,int y,int z)
     if(!inBounds(x,y,z))
         return -1;
 
-    return voxels[idx(x,y,z)].type;
+    return getVoxel(ivec3(x,y,z)).type;
 }
 
 vec3 colorFromType(int t)
