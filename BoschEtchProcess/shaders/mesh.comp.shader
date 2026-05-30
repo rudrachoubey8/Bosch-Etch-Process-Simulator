@@ -17,10 +17,24 @@ struct Vertex
     vec3 normal;
     vec3 color;
 };
+#define CHUNK_SIZE 32
+#define CHUNK_MASK 31
+#define CHUNK_VOLUME 32768
 
-layout(std430, binding = 6) readonly buffer Voxels
+struct Chunk
 {
-    Voxel voxels[];
+    int chunkX;
+    int chunkY;
+    int chunkZ;
+    int dirty;
+
+    Voxel voxels[CHUNK_VOLUME];
+};
+
+
+layout(std430, binding = 6) readonly buffer ChunkBuffer
+{
+    Chunk chunks[];
 };
 
 layout(std430, binding = 1) writeonly buffer Vertices
@@ -39,12 +53,42 @@ layout(std430, binding = 2) buffer Counter
 };
 
 uniform ivec3 gridSize;
-
-int idx(int x,int y,int z)
+uniform ivec3 chunkGridSize;
+int getChunkIndex(ivec3 worldPos)
 {
-    return x +
-           y * gridSize.x +
-           z * gridSize.x * gridSize.y;
+    ivec3 chunkCoord = worldPos >> 5;
+
+    return
+          chunkCoord.x
+        + chunkCoord.y * chunkGridSize.x
+        + chunkCoord.z * chunkGridSize.x * chunkGridSize.y;
+}
+
+int getLocalVoxelIndex(ivec3 worldPos)
+{
+    ivec3 local =
+        ivec3(
+            worldPos.x & CHUNK_MASK,
+            worldPos.y & CHUNK_MASK,
+            worldPos.z & CHUNK_MASK
+        );
+
+    return
+          local.x
+        + local.y * CHUNK_SIZE
+        + local.z * CHUNK_SIZE * CHUNK_SIZE;
+}
+
+Voxel getVoxel(ivec3 p)
+{
+    int chunkIndex =
+        getChunkIndex(p);
+
+    int localIndex =
+        getLocalVoxelIndex(p);
+
+    return chunks[chunkIndex]
+        .voxels[localIndex];
 }
 
 bool inBounds(int x,int y,int z)
@@ -55,15 +99,15 @@ bool inBounds(int x,int y,int z)
         y < gridSize.y &&
         z < gridSize.z;
 }
-
 bool solidAt(int x,int y,int z)
 {
     if(!inBounds(x,y,z))
         return false;
 
-    return voxels[idx(x,y,z)].solid != 0;
+    return getVoxel(
+        ivec3(x,y,z)
+    ).solid != 0;
 }
-
 int typeAt(int x,int y,int z)
 {
     if(!inBounds(x,y,z))
@@ -120,9 +164,16 @@ void writeFace(
 
 void main()
 {
-    ivec3 p = ivec3(gl_GlobalInvocationID);
+    ivec3 p =
+        ivec3(gl_GlobalInvocationID);
 
     if(!inBounds(p.x,p.y,p.z))
+        return;
+
+    int chunkIndex =
+        getChunkIndex(p);
+
+    if(chunks[chunkIndex].dirty == 0)
         return;
 
     if(!solidAt(p.x,p.y,p.z))

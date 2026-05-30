@@ -93,6 +93,20 @@ void Simulation::tick(std::vector<float> gridData, int typesOfVoxels, int typesO
 
     dispatchRayMarch(rayMarchProgram, getParticleCount(), gridData, typesOfVoxels, typesOfParticles);
     dispatchHits(resolveHitsProgram);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
+
+    Chunk* chunks =
+        (Chunk*)glMapBuffer(
+            GL_SHADER_STORAGE_BUFFER,
+            GL_READ_WRITE
+        );
+
+    for (int i = 0; i < 5; i++)
+    {
+        chunks[i].dirty = 0;
+    }
+
+    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 }
 
 void Simulation::chunk() {
