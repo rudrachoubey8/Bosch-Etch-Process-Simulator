@@ -185,9 +185,8 @@ void renderMesh(Simulation& simulation) {
 
     mesh.setRenderingProgram(shader.shaderProgram);
 
-    simulation.createBuffers();
     simulation.chunk();
-
+    simulation.createBuffers();
     simulation.uploadChunks(simulation.chunks);
 
     mesh.initGPU();
@@ -333,12 +332,12 @@ void renderMesh(Simulation& simulation) {
 
             if (out.is_open())
             {
-                size_t voxelCount = simulation.grid.voxels.size();
+                size_t chunkCount = simulation.chunks.size();
 
-                out.write((char*)&voxelCount, sizeof(size_t));
+                out.write((char*)&chunkCount, sizeof(size_t));
                 out.write(
-                    (char*)simulation.grid.voxels.data(),
-                    voxelCount * sizeof(Voxel)
+                    (char*)simulation.chunks.data(),
+                    simulation.chunks.size() * sizeof(Chunk)
                 );
 
                 out.close();
@@ -357,11 +356,11 @@ void renderMesh(Simulation& simulation) {
 
             if (in.is_open())
             {
-                size_t voxelCount = 0;
+                size_t chunkCount = 0;
 
-                in.read((char*)&voxelCount, sizeof(size_t));
+                in.read((char*)&chunkCount, sizeof(size_t));
 
-                if (voxelCount == simulation.grid.voxels.size())
+                if (chunkCount == simulation.grid.voxels.size())
                 {
                     in.read(
                         (char*)simulation.chunks.data(),

@@ -43,7 +43,7 @@ static GLuint loadComputeProgram(const char* path) {
 Mesh::Mesh(Grid& g) : grid(g) {}
 
 Mesh::~Mesh() {
-    glDeleteBuffers(1, &voxelSSBO);
+    glDeleteBuffers(1, &chunkSSBO);
     glDeleteBuffers(1, &vertexSSBO);
     glDeleteBuffers(1, &counterSSBO);
     glDeleteVertexArrays(1, &vao);

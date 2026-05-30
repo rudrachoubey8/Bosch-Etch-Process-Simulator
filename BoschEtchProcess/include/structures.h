@@ -19,9 +19,9 @@ struct Chunk {
     int chunkX = 0;
     int chunkY = 0;
     int chunkZ = 0;
+    int dirty = 1;
 
     Voxel voxels[chunkSize * chunkSize * chunkSize];
-    int dirty = 1;
 };
 
 
