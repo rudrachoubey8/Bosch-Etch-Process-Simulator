@@ -96,8 +96,8 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
     {
         buttonDown = false;
     }
-
 }
+
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 {
     D -= yoffset * 0.3f;
@@ -105,7 +105,6 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
     if (D < 0.3f) D = 0.3f;
     if (D > 20.0f) D = 20.0f;
 }
-
 
 void renderMesh(Simulation& simulation) {
 
@@ -139,8 +138,9 @@ void renderMesh(Simulation& simulation) {
         (mode->height - height) / 2
     );
 
+    glDisable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     Shader shader(
         "shaders/vertex.shader",
@@ -276,7 +276,8 @@ void renderMesh(Simulation& simulation) {
             particleTypes[selectedParticleType];
 
         ImGui::InputInt("Particle Count", &p.count);
-        ImGui::InputFloat("Particle Energy", &p.energy);
+        ImGui::InputFloat("Mean Energy", &p.energy);
+        ImGui::InputFloat("Std Dev", &p.stddev);
         ImGui::InputFloat("Half Angle", &p.halfAngle);
 
         ImGui::Checkbox("Deposit", &p.deposit);
@@ -498,11 +499,7 @@ void renderMesh(Simulation& simulation) {
                             particleTypes[i];
 
                         simulation.uploadParticles(
-                            p.count,
-                            p.halfAngle,
-                            i,
-                            p.deposit,
-                            p.energy
+                            p,i
                         );
                     }
                 }
@@ -528,6 +525,16 @@ void renderMesh(Simulation& simulation) {
             }
             mesh.draw();
         }
+        ImGui::Begin("Information");
+
+        ImGui::Separator();
+
+        ImGui::Text("Simulation");
+
+        ImGui::Text("Total Voxels: %d", mesh.voxelCount);
+
+        ImGui::End();
+
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

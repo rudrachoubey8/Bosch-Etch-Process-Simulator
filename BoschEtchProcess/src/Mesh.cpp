@@ -59,7 +59,7 @@ void Mesh::setVoxelBuffer(GLuint ssbo){
 }
 
 void Mesh::initGPU() {
-    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 6;
+    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z;
 
     // vertex SSBO
     glGenBuffers(1, &vertexSSBO);
@@ -71,15 +71,6 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
-    // mesh SSBO
-    glGenBuffers(1, &maskSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, maskSSBO);
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        grid.X * grid.Y * grid.Z * sizeof(int),
-        nullptr,
-        GL_DYNAMIC_DRAW
-    );
 
     // atomic counter
     glGenBuffers(1, &counterSSBO);
@@ -92,8 +83,18 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
+    glGenBuffers(1, &voxelCountSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
+    uint32_t zero2 = 0;
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(uint32_t),
+        &zero2,
+        GL_DYNAMIC_DRAW
+    );
+
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 13, maskSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 14, voxelCountSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
 
@@ -127,16 +128,15 @@ void Mesh::buildMesh() {
     uint32_t zero = 0;
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
 
-    for (size_t i = 0; i < 6; i++)
-    {
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
+    uint32_t zero2 = 0;
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero2);
+
+    
         glUseProgram(computeProgram);
         glUniform3i(
             glGetUniformLocation(computeProgram, "gridSize"),
             grid.X, grid.Y, grid.Z
-        );
-        glUniform1i(
-            glGetUniformLocation(computeProgram, "direction"),
-            i
         );
 
         glDispatchCompute(
@@ -151,7 +151,6 @@ void Mesh::buildMesh() {
             GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
         );
 
-    }
 
 
     glUseProgram(axesProgram);
@@ -174,13 +173,6 @@ void Mesh::buildMesh() {
         GL_SHADER_STORAGE_BARRIER_BIT |
         GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
     );
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
-    glGetBufferSubData(
-        GL_SHADER_STORAGE_BUFFER,
-        0,
-        sizeof(uint32_t),
-        &vertCount
-    );
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
     glGetBufferSubData(
@@ -188,6 +180,14 @@ void Mesh::buildMesh() {
         0,
         sizeof(uint32_t),
         &vertCount
+    );
+    
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(uint32_t),
+        &voxelCount
     );
 
 }

@@ -24,7 +24,7 @@ public:
 
 	void createBuffers();
 	void bindBuffers();
-	void uploadParticles(int n, float halfAngle, int type, bool deposit, float random);
+	void uploadParticles(ParticleTypeData p, int type);
 	void uploadVoxels(std::vector<Voxel>& voxels);
 	void dispatchRayMarch(GLuint program, int particleCount, std::vector<float> gridData, int typesOfVoxels, int typesOfParticles);
 	void dispatchHits(GLuint program);

@@ -286,25 +286,26 @@ void Simulation::bindBuffers(){
 
 }
 
-void Simulation::uploadParticles(int n, float halfAngle, int particleType, bool deposit, float energy) {
+void Simulation::uploadParticles(ParticleTypeData p, int particleType) {
 
     constexpr float pi = 3.1415926f;
     float random = Math::randomFloat(100);
-    float cosTheta = cos(halfAngle * 3.141592653589/180);
+    float cosTheta = cos(p.halfAngle * 3.141592653589/180);
     glUseProgram(initParticlesProgram);
 
     glUniform1ui(glGetUniformLocation(initParticlesProgram, "startIndex"), getParticleCount());
-    glUniform1ui(glGetUniformLocation(initParticlesProgram, "particleCount"), n);
+    glUniform1ui(glGetUniformLocation(initParticlesProgram, "particleCount"), p.count);
     glUniform1i(glGetUniformLocation(initParticlesProgram, "type"), particleType);
-    glUniform1i(glGetUniformLocation(initParticlesProgram, "deposit"), deposit);
-    glUniform1f(glGetUniformLocation(initParticlesProgram, "energy"), energy);
+    glUniform1i(glGetUniformLocation(initParticlesProgram, "deposit"), p.deposit);
+    glUniform1f(glGetUniformLocation(initParticlesProgram, "energy"), p.energy);
+    glUniform1f(glGetUniformLocation(initParticlesProgram, "stddev"), p.stddev);
     
     glUniform1f(glGetUniformLocation(initParticlesProgram, "cosTheta"), cosTheta);
     glUniform1f(glGetUniformLocation(initParticlesProgram, "X"), Settings::X);
     glUniform1f(glGetUniformLocation(initParticlesProgram, "Z"), Settings::Z);
     glUniform1f(glGetUniformLocation(initParticlesProgram, "seed"), random);
 
-    glDispatchCompute((n + 255) / 256, 1, 1);
+    glDispatchCompute((p.count + 255) / 256, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
 }

@@ -18,6 +18,7 @@ public:
     void setRenderingProgram(GLuint program);
     void setVoxelBuffer(GLuint ssbo);
     uint32_t vertCount = 0;
+    int voxelCount = 0;
 
 private:
     Grid& grid;
@@ -30,5 +31,6 @@ private:
     GLuint axesProgram = 0;
     GLuint renderProgram = 0;
     GLuint maskSSBO = 0;
+    GLuint voxelCountSSBO = 0;
 
 };

@@ -31,6 +31,7 @@ uniform float X;
 uniform float Z;
 uniform float seed;
 uniform float energy;
+uniform float stddev;
 
 uint hash(uint x)
 {
@@ -45,6 +46,18 @@ uint hash(uint x)
 float rand01(uint x)
 {
     return float(hash(x)) / 4294967296.0;
+}
+
+float normalRandom(uint seed, float mean, float stddev)
+{
+    float u1 = rand01(seed);
+    float u2 = rand01(seed + 123);
+
+    u1 = max(u1, 1e-6);
+
+    float z0 = sqrt(-2.0 * log(u1)) * cos(2.0 * 3.14159265 * u2);
+
+    return mean + z0 * stddev;
 }
 
 void main()
@@ -67,7 +80,7 @@ void main()
     particles[index].type = type;
     particles[index].speed = 10.0;
     particles[index].alive = 1;
-    particles[index].energy = energy;
+    particles[index].energy = normalRandom(id + uint(seed), energy, stddev);
 
     particles[index].dx = r * cos(phi);
     particles[index].dy = -y;

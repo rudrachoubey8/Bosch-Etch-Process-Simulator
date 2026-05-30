@@ -14,6 +14,7 @@ struct ParticleTypeData
 {
     int count = 1000;
     float energy = 100.0f;
+    float stddev = 5.0f;
     float halfAngle = 20.0f;
 
     bool deposit = false;
