@@ -482,6 +482,9 @@ void renderMesh(Simulation& simulation) {
             if (draw && frame % 10 == 0) {
                 mesh.buildMesh();
             }
+            if (frame % 20 == 0) {
+                mesh.resetChunks();
+            }
             mesh.draw();
         }
         ImGui::Begin("Information");

@@ -25,6 +25,8 @@ public:
 
 	void initRectangle(const Voxel& voxel, int x0, int y0, int z0, int x1, int y1, int z1);
 	void initParticle(const Particle& particle);
+
+
 	void setVoxel(int x, int y, int z, Voxel v);
 
 	void tick(std::vector<float> gridData, int typesOfVoxels, int typesOfParticles);
@@ -36,6 +38,7 @@ public:
 
 	void uploadParticles(ParticleTypeData p, int type);
 	void uploadChunks(std::vector<Chunk>& chunks, std::vector<Voxel>& voxels);
+	
 	void dispatchRayMarch(GLuint program, int particleCount, std::vector<float> gridData, int typesOfVoxels, int typesOfParticles);
 	void dispatchHits(GLuint program);
 

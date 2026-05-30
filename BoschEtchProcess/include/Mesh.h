@@ -15,6 +15,7 @@ public:
     void initGPU();     // create buffers, shaders, VAO
     void buildMesh();   // dispatch compute
     void draw();        // render
+    void resetChunks();
     void setRenderingProgram(GLuint program);
     void setChunkSSBO(GLuint ssbo);
     uint32_t vertCount = 0;
@@ -34,7 +35,7 @@ private:
     GLuint computeProgram = 0;
     GLuint axesProgram = 0;
     GLuint renderProgram = 0;
-
+    GLuint resetChunkProgram = 0;
     GLuint voxelCountSSBO = 0;
 
 };

@@ -123,7 +123,23 @@ void Mesh::initGPU() {
     path = "shaders/axes.shader";
     axesProgram = loadComputeProgram(path.c_str());
 
+    path = "shaders/resetChunks.shader";
+    resetChunkProgram = loadComputeProgram(path.c_str());
+
 }
+
+
+void Mesh::resetChunks() {
+    int numChunkX = (grid.X + chunkSize - 1) / chunkSize;
+    int numChunkY = (grid.Y + chunkSize - 1) / chunkSize;
+    int numChunkZ = (grid.Z + chunkSize - 1) / chunkSize;
+    glUseProgram(resetChunkProgram);
+    glUniform3i(glGetUniformLocation(resetChunkProgram, "chunkGridSize"), numChunkX, numChunkY, numChunkZ);
+    glDispatchCompute((numChunkX + 7) / 8, (numChunkY + 7) / 8, (numChunkZ + 7) / 8);
+    glMemoryBarrier(GL_ALL_BARRIER_BITS);
+}
+
+
 void Mesh::buildMesh() {
     vertCount = 0;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
@@ -152,15 +168,11 @@ void Mesh::buildMesh() {
         (grid.Y + 7) / 8,
         (grid.Z + 7) / 8
     );
-
-
     glMemoryBarrier(
         GL_SHADER_STORAGE_BARRIER_BIT |
         GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
     );
-
-
-
+    ///////
     glUseProgram(axesProgram);
     glUniform3i(
         glGetUniformLocation(axesProgram, "gridSize"),
@@ -197,6 +209,7 @@ void Mesh::buildMesh() {
         &voxelCount
     );
 
+    
 }
 
 void Mesh::draw() {

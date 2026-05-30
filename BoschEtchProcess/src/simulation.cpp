@@ -93,20 +93,6 @@ void Simulation::tick(std::vector<float> gridData, int typesOfVoxels, int typesO
     dispatchRayMarch(rayMarchProgram, getParticleCount(), gridData, typesOfVoxels, typesOfParticles);
     dispatchHits(resolveHitsProgram);
 
-    /*glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
-
-    Chunk* c =
-        (Chunk*)glMapBuffer(
-            GL_SHADER_STORAGE_BUFFER,
-            GL_READ_WRITE
-        );
-
-    for (int i = 0; i < chunks.size(); i++)
-    {
-        c[i].dirty = 0;
-    }
-
-    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);*/
 }
 
 void Simulation::chunk() {
@@ -237,19 +223,16 @@ int Simulation::getParticleCount()
 }
 
 void Simulation::createBuffers() {
-    std::cout << "X";
+    
     std::string path = "shaders/march.comp.shader";
     rayMarchProgram = loadComputeProgram(path.c_str());
-    std::cout << "Y";
-
+    
     std::string path2 = "shaders/resolveHits.shader";
     resolveHitsProgram = loadComputeProgram(path2.c_str());
-    std::cout << "Z";
 
     std::string path3 = "shaders/particle.init.shader";
     initParticlesProgram = loadComputeProgram(path3.c_str());
 
-    std::cout << "s";
     glGenBuffers(1, &particleSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleSSBO);
     glBufferData(
