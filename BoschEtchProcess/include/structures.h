@@ -21,7 +21,6 @@ struct Chunk {
     int chunkZ = 0;
     int dirty = 1;
 
-    Voxel voxels[chunkSize * chunkSize * chunkSize];
 };
 
 

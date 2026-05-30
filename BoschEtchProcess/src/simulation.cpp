@@ -10,11 +10,11 @@
 #include <chrono>
 
 static GLuint loadComputeProgram(const char* path) {
+    
     std::ifstream file(path);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open compute shader");
     }
-
     std::stringstream ss;
     ss << file.rdbuf();
     std::string src = ss.str();
@@ -32,7 +32,6 @@ static GLuint loadComputeProgram(const char* path) {
         std::cerr << "COMPUTE SHADER ERROR:\n" << log << std::endl;
         std::abort();
     }
-
     GLuint prog = glCreateProgram();
     
     glAttachShader(prog, cs);
@@ -118,27 +117,19 @@ void Simulation::chunk() {
 
     chunks.resize(numChunkX * numChunkY * numChunkZ);
     
-    for (int x = 0; x < X; x++){
-        for (int y = 0;y < Y;y++) {
-            for (int z = 0; z < Z; z++)
+    for (int x = 0; x < numChunkX; x++){
+        for (int y = 0;y < numChunkY;y++) {
+            for (int z = 0; z < numChunkZ; z++)
             {
-                int chunkX = x / chunkSize;
-                int chunkY = y / chunkSize;
-                int chunkZ = z / chunkSize;
+                
 
-                int voxelX = x % chunkSize;
-                int voxelY = y % chunkSize;
-                int voxelZ = z % chunkSize;
-
-
-                int index = chunkX + chunkY * numChunkX + chunkZ * numChunkX * numChunkY;
+                int index = x + y * numChunkX + z * numChunkX * numChunkY;
 
                 
-                chunks[index].chunkX = chunkX;
-                chunks[index].chunkY = chunkY;
-                chunks[index].chunkZ = chunkZ;
+                chunks[index].chunkX = x;
+                chunks[index].chunkY = y;
+                chunks[index].chunkZ = z;
 
-                chunks[index].voxels[voxelX + voxelY * chunkSize + voxelZ * chunkSize * chunkSize] = grid.at(x, y, z);
             }
         }
     }
@@ -246,15 +237,19 @@ int Simulation::getParticleCount()
 }
 
 void Simulation::createBuffers() {
+    std::cout << "X";
     std::string path = "shaders/march.comp.shader";
     rayMarchProgram = loadComputeProgram(path.c_str());
+    std::cout << "Y";
 
     std::string path2 = "shaders/resolveHits.shader";
     resolveHitsProgram = loadComputeProgram(path2.c_str());
+    std::cout << "Z";
 
     std::string path3 = "shaders/particle.init.shader";
     initParticlesProgram = loadComputeProgram(path3.c_str());
 
+    std::cout << "s";
     glGenBuffers(1, &particleSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleSSBO);
     glBufferData(
@@ -263,12 +258,19 @@ void Simulation::createBuffers() {
         nullptr,
         GL_DYNAMIC_DRAW
     );
-
     glGenBuffers(1, &chunkSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
     glBufferData(
         GL_SHADER_STORAGE_BUFFER,
         sizeof(Chunk) * chunks.size(),
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
+    glGenBuffers(1, &voxelSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        sizeof(Voxel) * grid.X * grid.Y * grid.Z,
         nullptr,
         GL_DYNAMIC_DRAW
     );
@@ -329,6 +331,7 @@ void Simulation::bindBuffers(){
     
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, particleSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, chunkSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 12, voxelSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, hitSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 15, reactionProbabilitiesSSBO);
 
@@ -362,7 +365,7 @@ void Simulation::uploadParticles(ParticleTypeData p, int particleType) {
 
 }
 
-void Simulation::uploadChunks(std::vector<Chunk>& chunks) {
+void Simulation::uploadChunks(std::vector<Chunk>& chunks, std::vector<Voxel>& voxels) {
 
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
@@ -372,7 +375,13 @@ void Simulation::uploadChunks(std::vector<Chunk>& chunks) {
         chunks.size() * sizeof(Chunk),
         chunks.data()
     );
-
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelSSBO);
+    glBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        voxels.size() * sizeof(Voxel),
+        voxels.data()
+    );
 }
 
 void Simulation::reset() {

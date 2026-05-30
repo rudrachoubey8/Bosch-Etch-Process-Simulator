@@ -16,6 +16,7 @@ public:
 	std::vector<Chunk> chunks;
 
 	GLuint chunkSSBO = 0;
+	GLuint voxelSSBO = 0;
 
 	int numChunkX, numChunkY, numChunkZ;
 
@@ -34,7 +35,7 @@ public:
 	void chunk();
 
 	void uploadParticles(ParticleTypeData p, int type);
-	void uploadChunks(std::vector<Chunk>& chunks);
+	void uploadChunks(std::vector<Chunk>& chunks, std::vector<Voxel>& voxels);
 	void dispatchRayMarch(GLuint program, int particleCount, std::vector<float> gridData, int typesOfVoxels, int typesOfParticles);
 	void dispatchHits(GLuint program);
 

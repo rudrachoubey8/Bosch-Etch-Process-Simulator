@@ -30,7 +30,6 @@ struct Chunk {
     int chunkZ;
     int dirty;
 
-    Voxel voxels[CHUNK_VOLUME];
 };
 
 struct HitEvent {
@@ -46,6 +45,11 @@ layout(std430, binding = 5) readonly buffer ParticleBuffer {
 layout(std430, binding = 6) buffer ChunkBuffer {
     Chunk chunks[];
 };
+
+layout(std430, binding = 12) buffer VoxelBuffer {
+    Voxel voxels[];
+};
+
 
 layout(std430, binding = 7) buffer HitBuffer {
     HitEvent hits[];
@@ -95,31 +99,10 @@ int getChunkIndex(ivec3 worldPos)
         + chunkCoord.z * chunkGridSize.x * chunkGridSize.y;
 }
 
-int getLocalVoxelIndex(ivec3 worldPos)
-{
-    ivec3 local =
-        ivec3(
-            worldPos.x & CHUNK_MASK,
-            worldPos.y & CHUNK_MASK,
-            worldPos.z & CHUNK_MASK
-        );
-
-    return
-          local.x
-        + local.y * CHUNK_SIZE
-        + local.z * CHUNK_SIZE * CHUNK_SIZE;
-}
 
 Voxel getVoxel(ivec3 worldPos)
 {
-    int chunkIndex =
-        getChunkIndex(worldPos);
-
-    int localIndex =
-        getLocalVoxelIndex(worldPos);
-
-    return chunks[chunkIndex]
-        .voxels[localIndex];
+    return voxels[worldPos.x + worldPos.y * gridSize.x + worldPos.z * gridSize.x * gridSize.y];
 }
 
 void markChunkDirty(ivec3 worldPos)

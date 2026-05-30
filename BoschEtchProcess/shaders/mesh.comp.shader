@@ -28,13 +28,15 @@ struct Chunk
     int chunkZ;
     int dirty;
 
-    Voxel voxels[CHUNK_VOLUME];
 };
 
 
 layout(std430, binding = 6) readonly buffer ChunkBuffer
 {
     Chunk chunks[];
+};
+layout(std430, binding = 12) buffer VoxelBuffer {
+    Voxel voxels[];
 };
 
 layout(std430, binding = 1) writeonly buffer Vertices
@@ -66,31 +68,11 @@ int getChunkIndex(ivec3 worldPos)
         + chunkCoord.z * chunkGridSize.x * chunkGridSize.y;
 }
 
-int getLocalVoxelIndex(ivec3 worldPos)
+
+
+int getVoxel(ivec3 worldPos)
 {
-    ivec3 local =
-        ivec3(
-            worldPos.x & CHUNK_MASK,
-            worldPos.y & CHUNK_MASK,
-            worldPos.z & CHUNK_MASK
-        );
-
-    return
-          local.x
-        + local.y * CHUNK_SIZE
-        + local.z * CHUNK_SIZE * CHUNK_SIZE;
-}
-
-Voxel getVoxel(ivec3 p)
-{
-    int chunkIndex =
-        getChunkIndex(p);
-
-    int localIndex =
-        getLocalVoxelIndex(p);
-
-    return chunks[chunkIndex]
-        .voxels[localIndex];
+    return worldPos.x + worldPos.y * gridSize.x + worldPos.z * gridSize.x * gridSize.y;
 }
 
 bool inBounds(int x,int y,int z)
@@ -106,16 +88,14 @@ bool solidAt(int x,int y,int z)
     if(!inBounds(x,y,z))
         return false;
 
-    return getVoxel(
-        ivec3(x,y,z)
-    ).solid != 0;
+    return voxels[getVoxel(ivec3(x,y,z))].solid != 0;
 }
 int typeAt(int x,int y,int z)
 {
     if(!inBounds(x,y,z))
         return -1;
 
-    return getVoxel(ivec3(x,y,z)).type;
+    return voxels[getVoxel(ivec3(x,y,z))].type;
 }
 
 vec3 colorFromType(int t)

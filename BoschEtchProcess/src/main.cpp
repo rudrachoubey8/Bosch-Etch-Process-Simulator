@@ -187,7 +187,7 @@ void renderMesh(Simulation& simulation) {
 
     simulation.chunk();
     simulation.createBuffers();
-    simulation.uploadChunks(simulation.chunks);
+    simulation.uploadChunks(simulation.chunks, simulation.grid.voxels);
 
     mesh.initGPU();
     vector<Voxel> v = simulation.grid.voxels;
@@ -199,7 +199,7 @@ void renderMesh(Simulation& simulation) {
     double tickTime = 0;
 
     bool pause = 1;
-    bool draw = 1;
+    bool draw = 0;
     bool ion = 0;
 
     // Initialize Measurment function
@@ -369,7 +369,7 @@ void renderMesh(Simulation& simulation) {
 
                     in.close();
 
-                    simulation.uploadChunks(simulation.chunks);
+                    simulation.uploadChunks(simulation.chunks, simulation.grid.voxels);
 
                     mesh.initGPU();
                     mesh.setChunkSSBO(simulation.chunkSSBO);
@@ -507,7 +507,7 @@ void renderMesh(Simulation& simulation) {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    glfwDestroyWindow(window);
+    //glfwDestroyWindow(window);
     glfwTerminate();
 }
 int main() {
