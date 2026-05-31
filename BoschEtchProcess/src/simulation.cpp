@@ -116,7 +116,7 @@ void Simulation::chunk() {
                 chunks[index].chunkY = y;
                 chunks[index].chunkZ = z;
                 
-                chunks[index].vertexOffset = index * chunkSize * chunkSize * chunkSize;
+                chunks[index].vertexOffset = index * chunkSize * chunkSize * chunkSize * 24;
                 chunks[index].dirty = 1;
 
             }

@@ -61,7 +61,7 @@ layout(std430, binding = 3) buffer DirtyIndices
 };
 uniform ivec3 gridSize;
 uniform ivec3 chunkGridSize;
-
+uniform int dirtyCount;
 
 int getChunkIndex(ivec3 worldPos)
 {
@@ -157,7 +157,7 @@ void main()
     uint chunkLocalX =
         gl_WorkGroupID.x % 4u;
 
-    if(chunkDispatch >= dirtyIndices.length())
+    if(chunkDispatch >= dirtyCount)
         return;
 
     uint chunkIndex =

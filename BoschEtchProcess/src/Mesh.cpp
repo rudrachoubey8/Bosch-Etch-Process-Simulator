@@ -60,7 +60,7 @@ void Mesh::setSSBO(GLuint ssbo, GLuint ssbo2){
 }
 
 void Mesh::initGPU() {
-    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 36;
+    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 24;
     numChunkX = (grid.X + chunkSize - 1) / chunkSize;
     numChunkY = (grid.Y + chunkSize - 1) / chunkSize;
     numChunkZ = (grid.Z + chunkSize - 1) / chunkSize;
@@ -157,6 +157,12 @@ void Mesh::buildMesh(int dirtyCount)
 
     glUseProgram(computeProgram);
 
+    glUniform1i(
+        glGetUniformLocation(
+            computeProgram,
+            "dirtyCount"
+        ), dirtyCount
+    );
     glUniform3i(
         glGetUniformLocation(
             computeProgram,
