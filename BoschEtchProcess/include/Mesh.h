@@ -13,13 +13,14 @@ public:
     ~Mesh();
 
     void initGPU();     // create buffers, shaders, VAO
-    void buildMesh();   // dispatch compute
-    void draw();        // render
+    void buildMesh(int dirtyCount);   // dispatch compute
+    void draw(int dirtyCount);        // render
     void resetChunks();
     void setRenderingProgram(GLuint program);
-    void setChunkSSBO(GLuint ssbo);
+    void setSSBO(GLuint dirtyIndicesSSBO, GLuint chunkSSBO);
     uint32_t vertCount = 0;
     int voxelCount = 0;
+    int numChunkX, numChunkY, numChunkZ;
 
 private:
     Grid& grid;
@@ -28,6 +29,10 @@ private:
 
     GLuint vertexSSBO = 0;
     GLuint counterSSBO = 0;
+    
+    GLuint dirtyIndicesSSBO = 0;
+    GLuint dirtyCountSSBO = 0;
+
     GLuint vao = 0;
 
 

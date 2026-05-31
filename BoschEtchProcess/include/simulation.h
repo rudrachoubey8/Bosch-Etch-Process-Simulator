@@ -17,8 +17,10 @@ public:
 
 	GLuint chunkSSBO = 0;
 	GLuint voxelSSBO = 0;
+	GLuint dirtyIndicesSSBO = 0;
 
 	int numChunkX, numChunkY, numChunkZ;
+	int dirtyCount = 0;
 
 	Simulation(int X, int Y, int Z, float voxelSize);
 
@@ -56,6 +58,7 @@ private:
 	uint32_t MAX_STEPS = 5000;
 	float MIN_ENERGY = 1e-6f;
 	GLuint particleSSBO = 0, hitSSBO = 0, reactionProbabilitiesSSBO = 0, counterSSBO = 0, axesSSBO = 0, rayMarchProgram = 0, finalParticlesCount = 0, finalParticles = 0;
+	GLuint dirtyCountSSBO = 0;
 	GLuint resolveHitsProgram = 0;
 	GLuint initParticlesProgram = 0;
 };

@@ -115,6 +115,9 @@ void Simulation::chunk() {
                 chunks[index].chunkX = x;
                 chunks[index].chunkY = y;
                 chunks[index].chunkZ = z;
+                
+                chunks[index].vertexOffset = index * chunkSize * chunkSize * chunkSize;
+                chunks[index].dirty = 1;
 
             }
         }
@@ -307,6 +310,27 @@ void Simulation::createBuffers() {
         &z2,
         GL_DYNAMIC_DRAW
     );
+    {
+        glGenBuffers(1, &dirtyCountSSBO);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, dirtyCountSSBO);
+        uint32_t zero3 = 0;
+        glBufferData(
+            GL_SHADER_STORAGE_BUFFER,
+            sizeof(uint32_t),
+            &zero3,
+            GL_DYNAMIC_DRAW
+        );
+    }
+
+    glGenBuffers(1, &dirtyIndicesSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, dirtyIndicesSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        chunks.size() * sizeof(uint32_t),
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
+
 
 }
 
@@ -317,6 +341,8 @@ void Simulation::bindBuffers(){
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 12, voxelSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, hitSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 15, reactionProbabilitiesSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 13, dirtyCountSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, dirtyIndicesSSBO);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, counterSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, finalParticlesCount);
@@ -388,7 +414,21 @@ void Simulation::reset() {
 void Simulation::dispatchHits(GLuint program) {
 
     uint32_t hitCount = 0;
+    {
+        uint32_t zero = 0;
 
+        glBindBuffer(
+            GL_SHADER_STORAGE_BUFFER,
+            dirtyCountSSBO
+        );
+
+        glBufferSubData(
+            GL_SHADER_STORAGE_BUFFER,
+            0,
+            sizeof(uint32_t),
+            &zero
+        );
+    }
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &hitCount);
 
@@ -401,4 +441,16 @@ void Simulation::dispatchHits(GLuint program) {
     int groups = (hitCount + 255) / 256;
     glDispatchCompute(groups, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER,
+        dirtyCountSSBO
+    );
+
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(uint32_t),
+        &dirtyCount
+    );
 }

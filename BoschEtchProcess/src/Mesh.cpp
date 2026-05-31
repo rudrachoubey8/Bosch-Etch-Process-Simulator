@@ -54,12 +54,16 @@ void Mesh::setRenderingProgram(GLuint shaderProgram) {
     renderProgram = shaderProgram;
 }
 
-void Mesh::setChunkSSBO(GLuint ssbo){
-    chunkSSBO = ssbo;
+void Mesh::setSSBO(GLuint ssbo, GLuint ssbo2){
+    dirtyIndicesSSBO = ssbo;
+    chunkSSBO = ssbo2;
 }
 
 void Mesh::initGPU() {
-    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z;
+    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 36;
+    numChunkX = (grid.X + chunkSize - 1) / chunkSize;
+    numChunkY = (grid.Y + chunkSize - 1) / chunkSize;
+    numChunkZ = (grid.Z + chunkSize - 1) / chunkSize;
 
     // vertex SSBO
     glGenBuffers(1, &vertexSSBO);
@@ -83,8 +87,6 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
-    
-
     glGenBuffers(1, &voxelCountSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
     uint32_t zero2 = 0;
@@ -95,7 +97,6 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, chunkSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 14, voxelCountSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
@@ -130,53 +131,67 @@ void Mesh::initGPU() {
 
 
 void Mesh::resetChunks() {
-    int numChunkX = (grid.X + chunkSize - 1) / chunkSize;
-    int numChunkY = (grid.Y + chunkSize - 1) / chunkSize;
-    int numChunkZ = (grid.Z + chunkSize - 1) / chunkSize;
     glUseProgram(resetChunkProgram);
     glUniform3i(glGetUniformLocation(resetChunkProgram, "chunkGridSize"), numChunkX, numChunkY, numChunkZ);
     glDispatchCompute((numChunkX + 7) / 8, (numChunkY + 7) / 8, (numChunkZ + 7) / 8);
     glMemoryBarrier(GL_ALL_BARRIER_BITS);
 }
 
-
-void Mesh::buildMesh() {
+void Mesh::buildMesh(int dirtyCount)
+{
     vertCount = 0;
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+
     uint32_t zero = 0;
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
 
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
-    uint32_t zero2 = 0;
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero2);
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER,
+        counterSSBO
+    );
 
-    int numChunkX = (grid.X + chunkSize - 1) / chunkSize;
-    int numChunkY = (grid.Y + chunkSize - 1) / chunkSize;
-    int numChunkZ = (grid.Z + chunkSize - 1) / chunkSize;
-    
+    glBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(uint32_t),
+        &zero
+    );
+
     glUseProgram(computeProgram);
+
     glUniform3i(
-        glGetUniformLocation(computeProgram, "gridSize"),
-        grid.X, grid.Y, grid.Z
+        glGetUniformLocation(
+            computeProgram,
+            "gridSize"
+        ),
+        grid.X,
+        grid.Y,
+        grid.Z
     );
+
     glUniform3i(
-        glGetUniformLocation(computeProgram, "chunkGridSize"),
-        numChunkX, numChunkY, numChunkZ
+        glGetUniformLocation(
+            computeProgram,
+            "chunkGridSize"
+        ),
+        numChunkX,
+        numChunkY,
+        numChunkZ
     );
+
     glDispatchCompute(
-        (grid.X + 7) / 8,
-        (grid.Y + 7) / 8,
-        (grid.Z + 7) / 8
+        dirtyCount * 4,
+        4,
+        4
     );
+
     glMemoryBarrier(
         GL_SHADER_STORAGE_BARRIER_BIT |
         GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
     );
-    ///////
+
     glUseProgram(axesProgram);
     glUniform3i(
         glGetUniformLocation(axesProgram, "gridSize"),
-        grid.X/10, grid.Y, grid.Z/10
+        grid.X / 10, grid.Y, grid.Z / 10
     );
     glUniform1i(
         glGetUniformLocation(axesProgram, "size"),
@@ -188,32 +203,75 @@ void Mesh::buildMesh() {
         (grid.Z + 7) / 8
     );
 
+
     glMemoryBarrier(
         GL_SHADER_STORAGE_BARRIER_BIT |
         GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
     );
 
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER,
+        counterSSBO
+    );
+
     glGetBufferSubData(
         GL_SHADER_STORAGE_BUFFER,
         0,
         sizeof(uint32_t),
         &vertCount
     );
-    
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
+}
+
+void Mesh::draw(int dirtyCount)
+{
+    struct DrawInfo
+    {
+        int vertexOffset;
+        int vertexCount;
+    };
+    glUseProgram(renderProgram);
+    glBindVertexArray(vao);
+
+    // Download dirty indices
+    std::vector<uint32_t> dirty(dirtyCount);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, dirtyIndicesSSBO);
     glGetBufferSubData(
         GL_SHADER_STORAGE_BUFFER,
         0,
-        sizeof(uint32_t),
-        &voxelCount
+        dirtyCount * sizeof(uint32_t),
+        dirty.data()
     );
 
-    
-}
+    // Download only the draw ranges for dirty chunks
+    std::vector<DrawInfo> draws(dirtyCount);
 
-void Mesh::draw() {
-    glUseProgram(renderProgram);
-    glBindVertexArray(vao);
-    glDrawArrays(GL_TRIANGLES, 0, vertCount);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkSSBO);
+
+    
+    for (int i = 0; i < dirtyCount; i++)
+    {
+        const GLintptr offset =
+            dirty[i] * sizeof(Chunk) +
+            offsetof(Chunk, vertexOffset);
+
+        glGetBufferSubData(
+            GL_SHADER_STORAGE_BUFFER,
+            offset,
+            sizeof(DrawInfo),
+            &draws[i]
+        );
+    }
+
+    for (const DrawInfo& d : draws)
+    {
+        if (d.vertexCount > 0)
+        {
+            glDrawArrays(
+                GL_TRIANGLES,
+                d.vertexOffset,
+                d.vertexCount
+            );
+        }
+    }
 }

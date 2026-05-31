@@ -27,11 +27,13 @@ struct Chunk
     int chunkY;
     int chunkZ;
     int dirty;
-
+    
+    uint vertexOffset;
+    uint vertexCount;
 };
 
 
-layout(std430, binding = 6) readonly buffer ChunkBuffer
+layout(std430, binding = 6) buffer ChunkBuffer
 {
     Chunk chunks[];
 };
@@ -53,7 +55,10 @@ layout(std430, binding = 2) buffer Counter
 {
     uint vertCount;
 };
-
+layout(std430, binding = 3) buffer DirtyIndices
+{
+    uint dirtyIndices[];
+};
 uniform ivec3 gridSize;
 uniform ivec3 chunkGridSize;
 
@@ -146,16 +151,38 @@ void writeFace(
 
 void main()
 {
-    ivec3 p =
-        ivec3(gl_GlobalInvocationID);
+    uint chunkDispatch =
+        gl_WorkGroupID.x / 4u;
 
-    if(!inBounds(p.x,p.y,p.z))
+    uint chunkLocalX =
+        gl_WorkGroupID.x % 4u;
+
+    if(chunkDispatch >= dirtyIndices.length())
         return;
 
-    int chunkIndex =
-        getChunkIndex(p);
+    uint chunkIndex =
+        dirtyIndices[chunkDispatch];
 
-    if(chunks[chunkIndex].dirty == 0)
+    ivec3 chunkOrigin =
+        ivec3(
+            chunks[chunkIndex].chunkX,
+            chunks[chunkIndex].chunkY,
+            chunks[chunkIndex].chunkZ
+        ) * CHUNK_SIZE;
+
+    ivec3 subBlock =
+        ivec3(
+            int(chunkLocalX),
+            int(gl_WorkGroupID.y),
+            int(gl_WorkGroupID.z)
+        ) * 8;
+
+    ivec3 p =
+        chunkOrigin +
+        subBlock +
+        ivec3(gl_LocalInvocationID);
+
+    if(!inBounds(p.x,p.y,p.z))
         return;
 
     if(!solidAt(p.x,p.y,p.z))
@@ -184,7 +211,7 @@ void main()
     faceCount += uint(pz);
     faceCount += uint(nz);
 
-    uint v = atomicAdd(vertCount, faceCount * 6u);
+    uint v = chunks[chunkIndex].vertexOffset + atomicAdd(chunks[chunkIndex].vertexCount, faceCount * 6u);
 
     vec3 color = colorFromType(typeAt(p.x,p.y,p.z));
 

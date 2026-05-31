@@ -6,6 +6,8 @@ struct Chunk {
     int chunkY;
     int chunkZ;
     int dirty;
+    uint vertexOffset;
+    uint vertexCount;
 };
 
 layout(std430, binding = 6) buffer ChunkBuffer {
@@ -25,6 +27,10 @@ void main() {
     int index = id.x
               + id.y * chunkGridSize.x
               + id.z * chunkGridSize.x * chunkGridSize.y;
+    
+    if(chunks[index].dirty == 1){
+        chunks[index].vertexCount = 0;
+        }
 
     chunks[index].dirty = 0;
 }

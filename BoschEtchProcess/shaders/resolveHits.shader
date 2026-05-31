@@ -18,7 +18,9 @@ struct Chunk {
     int chunkY;
     int chunkZ;
     int dirty;
-
+    
+    uint vertexOffset;
+    uint vertexCount;
 };
 
 struct HitEvent {
@@ -41,6 +43,14 @@ layout(std430, binding = 7) readonly buffer HitBuffer {
 layout(std430, binding = 8) readonly buffer HitCounter {
     uint hitCount;
 };
+
+layout(std430, binding = 13) buffer DirtyCounter {
+    uint dirtyCount;
+};
+layout(std430, binding = 3) buffer DirtyIndices {
+    uint dirtyIndices[];
+};
+
 
 uniform ivec3 gridSize;
 uniform ivec3 chunkGridSize;
@@ -130,12 +140,21 @@ void main()
 
         voxels[index] = v;
     }
-
     if(changed)
     {
-        atomicExchange(
+        if(atomicExchange(
             chunks[chunkIndex].dirty,
             1
-        );
+        ) == 0)
+        {
+            uint slot =
+                atomicAdd(
+                    dirtyCount,
+                    1u
+                );
+
+            dirtyIndices[slot] =
+                uint(chunkIndex);
+        }
     }
 }

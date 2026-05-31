@@ -189,11 +189,12 @@ void renderMesh(Simulation& simulation) {
     simulation.createBuffers();
     simulation.uploadChunks(simulation.chunks, simulation.grid.voxels);
 
-    mesh.initGPU();
     vector<Voxel> v = simulation.grid.voxels;
 
-    mesh.setChunkSSBO(simulation.chunkSSBO);
-    mesh.buildMesh();
+    mesh.setSSBO(simulation.dirtyIndicesSSBO, simulation.chunkSSBO);
+    mesh.initGPU();
+    mesh.buildMesh(simulation.dirtyCount);
+
 
     int frame = 0;
     double tickTime = 0;
@@ -235,7 +236,6 @@ void renderMesh(Simulation& simulation) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-
 
     ImGui::StyleColorsDark();
 
@@ -294,9 +294,8 @@ void renderMesh(Simulation& simulation) {
 
             //simulation.uploadChunks(v);
 
-            mesh.initGPU();
-            mesh.setChunkSSBO(simulation.chunkSSBO);
-            mesh.buildMesh();
+            mesh.setSSBO(simulation.dirtyIndicesSSBO, simulation.chunkSSBO);
+            mesh.buildMesh(simulation.dirtyCount);
         }
 
         ImGui::End();
@@ -371,9 +370,7 @@ void renderMesh(Simulation& simulation) {
 
                     simulation.uploadChunks(simulation.chunks, simulation.grid.voxels);
 
-                    mesh.initGPU();
-                    mesh.setChunkSSBO(simulation.chunkSSBO);
-                    mesh.buildMesh();
+                    mesh.buildMesh(simulation.dirtyCount);
 
                     std::cout << "Loaded grid from: " << gridFilename << std::endl;
                 }
@@ -480,21 +477,16 @@ void renderMesh(Simulation& simulation) {
         }
         if (draw) {
             if (draw && frame % 10 == 0) {
-                mesh.buildMesh();
-            }
-            if (frame % 20 == 0) {
                 mesh.resetChunks();
+                mesh.buildMesh(simulation.dirtyCount);
             }
-            mesh.draw();
+            mesh.draw(simulation.dirtyCount);
         }
+
         ImGui::Begin("Information");
-
         ImGui::Separator();
-
         ImGui::Text("Simulation");
-
         ImGui::Text("Total Voxels: %d", mesh.voxelCount);
-
         ImGui::End();
 
 

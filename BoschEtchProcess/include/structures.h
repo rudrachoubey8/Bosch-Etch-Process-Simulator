@@ -21,6 +21,9 @@ struct Chunk {
     int chunkZ = 0;
     int dirty = 1;
 
+    int vertexOffset = 0;
+    int vertexCount = 0;
+
 };
 
 
