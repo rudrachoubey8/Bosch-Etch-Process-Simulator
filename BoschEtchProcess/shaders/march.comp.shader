@@ -315,13 +315,13 @@ void main()
                         cell + normal;
 
                     hits[writeIdx].cx =
-                        neighbor.x;
+                        cell.x;
 
                     hits[writeIdx].cy =
-                        neighbor.y;
+                        cell.y;
 
                     hits[writeIdx].cz =
-                        neighbor.z;
+                        cell.z;
 
                     hits[writeIdx].damage =
                         damage;

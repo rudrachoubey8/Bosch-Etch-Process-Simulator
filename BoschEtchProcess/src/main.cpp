@@ -261,7 +261,7 @@ void renderMesh(Simulation& simulation) {
             particleTypes.resize(typesOfParticles);
         }
 
-        ImGui::SliderInt("Duration", &duration, 0, 10000);
+        ImGui::SliderInt("Duration", &duration, 0, 50000);
         ImGui::SliderInt(
             "Selected Particle Type",
             &selectedParticleType,

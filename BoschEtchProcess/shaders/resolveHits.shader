@@ -60,9 +60,9 @@ void main()
         if(v.depositThreshold <= 0.0)
         {
             v.solid = 1;
-            v.type = 2;
-            v.threshold = 1000;
-            v.depositThreshold = 10;
+            v.type = 3;
+            v.threshold = 10000;
+            v.depositThreshold = 10000;
         }
     }
     else
