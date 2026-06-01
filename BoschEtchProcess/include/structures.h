@@ -10,6 +10,7 @@ struct Voxel {
     int solid;
     int type;
 };
+
 struct ParticleTypeData
 {
     int count = 1000;
@@ -19,7 +20,26 @@ struct ParticleTypeData
 
     bool deposit = false;
     bool draw = true;
+
+    int interval = 10;
 };
+struct SaveData
+{
+    int duration;
+
+    int voxelType;
+    int solid;
+
+    float voxelThreshold;
+    float voxelDepositThreshold;
+
+    int typesOfVoxels;
+    int typesOfParticles;
+
+    std::vector<ParticleTypeData> particleTypes;
+    std::vector<float> gridData;
+};
+
 struct Particle {
     int alive = 1;
     float x = 0,y = 0,z = 0;

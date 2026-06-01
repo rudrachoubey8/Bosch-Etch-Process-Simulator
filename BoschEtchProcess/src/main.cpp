@@ -205,7 +205,6 @@ void renderMesh(Simulation& simulation) {
     Measure measure;
     
     int duration = 3000;
-    int waitTime = 10;
 
     int voxelType = 1;
     int solid = 1;
@@ -263,8 +262,6 @@ void renderMesh(Simulation& simulation) {
         }
 
         ImGui::SliderInt("Duration", &duration, 0, 10000);
-        ImGui::SliderInt("Wait Time", &waitTime, 1, 100);
-
         ImGui::SliderInt(
             "Selected Particle Type",
             &selectedParticleType,
@@ -279,6 +276,10 @@ void renderMesh(Simulation& simulation) {
         ImGui::InputFloat("Mean Energy", &p.energy);
         ImGui::InputFloat("Std Dev", &p.stddev);
         ImGui::InputFloat("Half Angle", &p.halfAngle);
+        ImGui::InputInt("Release Interval", &p.interval);
+
+        if (p.interval < 1)
+            p.interval = 1;
 
         ImGui::Checkbox("Deposit", &p.deposit);
 
@@ -366,13 +367,13 @@ void renderMesh(Simulation& simulation) {
         ImGui::Begin("Grid Save/Load");
 
         ImGui::InputText("Filename", gridFilename, IM_ARRAYSIZE(gridFilename));
-
         if (ImGui::Button("Save Grid"))
         {
             std::ofstream out(gridFilename, std::ios::binary);
 
             if (out.is_open())
             {
+                // Grid
                 size_t voxelCount = simulation.grid.voxels.size();
 
                 out.write((char*)&voxelCount, sizeof(size_t));
@@ -381,16 +382,47 @@ void renderMesh(Simulation& simulation) {
                     voxelCount * sizeof(Voxel)
                 );
 
+                // Settings
+                out.write((char*)&duration, sizeof(duration));
+
+                out.write((char*)&voxelType, sizeof(voxelType));
+                out.write((char*)&solid, sizeof(solid));
+
+                out.write((char*)&voxelThreshold, sizeof(voxelThreshold));
+                out.write((char*)&voxelDepositThreshold, sizeof(voxelDepositThreshold));
+
+                out.write((char*)&typesOfVoxels, sizeof(typesOfVoxels));
+                out.write((char*)&typesOfParticles, sizeof(typesOfParticles));
+
+                // Particle types
+                size_t particleCount = particleTypes.size();
+
+                out.write(
+                    (char*)&particleCount,
+                    sizeof(particleCount)
+                );
+
+                out.write(
+                    (char*)particleTypes.data(),
+                    particleCount * sizeof(ParticleTypeData)
+                );
+
+                // Reaction / Deposit / Adsorb grid
+                size_t gridSize = gridData.size();
+
+                out.write((char*)&gridSize, sizeof(gridSize));
+
+                out.write(
+                    (char*)gridData.data(),
+                    gridSize * sizeof(float)
+                );
+
                 out.close();
 
-                std::cout << "Saved grid to: " << gridFilename << std::endl;
-            }
-            else
-            {
-                std::cout << "Failed to save grid.\n";
+                std::cout << "Saved grid + settings to: "
+                    << gridFilename << std::endl;
             }
         }
-
         if (ImGui::Button("Load Grid"))
         {
             std::ifstream in(gridFilename, std::ios::binary);
@@ -408,25 +440,62 @@ void renderMesh(Simulation& simulation) {
                         voxelCount * sizeof(Voxel)
                     );
 
+                    // Settings
+                    in.read((char*)&duration, sizeof(duration));
+                    in.read((char*)&voxelType, sizeof(voxelType));
+                    in.read((char*)&solid, sizeof(solid));
+
+                    in.read((char*)&voxelThreshold, sizeof(voxelThreshold));
+                    in.read((char*)&voxelDepositThreshold, sizeof(voxelDepositThreshold));
+
+                    in.read((char*)&typesOfVoxels, sizeof(typesOfVoxels));
+                    in.read((char*)&typesOfParticles, sizeof(typesOfParticles));
+
+                    // Particle types
+                    size_t particleCount;
+
+                    in.read(
+                        (char*)&particleCount,
+                        sizeof(particleCount)
+                    );
+
+                    particleTypes.resize(particleCount);
+
+                    in.read(
+                        (char*)particleTypes.data(),
+                        particleCount * sizeof(ParticleTypeData)
+                    );
+
+                    // Grid data
+                    size_t gridSize;
+
+                    in.read((char*)&gridSize, sizeof(gridSize));
+
+                    gridData.resize(gridSize);
+
+                    in.read(
+                        (char*)gridData.data(),
+                        gridSize * sizeof(float)
+                    );
+
                     in.close();
 
-                    simulation.uploadVoxels(simulation.grid.voxels);
+                    simulation.uploadVoxels(
+                        simulation.grid.voxels
+                    );
 
                     mesh.initGPU();
                     mesh.setVoxelBuffer(simulation.voxelSSBO);
                     mesh.buildMesh();
 
-                    std::cout << "Loaded grid from: " << gridFilename << std::endl;
+                    std::cout << "Loaded grid + settings from: "
+                        << gridFilename << std::endl;
                 }
                 else
                 {
                     std::cout << "Voxel count mismatch.\n";
                     in.close();
                 }
-            }
-            else
-            {
-                std::cout << "Failed to load grid.\n";
             }
         }
 
@@ -487,20 +556,16 @@ void renderMesh(Simulation& simulation) {
             {
                 auto t1 = Clock::now();
 
-                if (
-                    waitTime > 0 &&
-                    frame <= duration &&
-                    frame % waitTime == 0
-                    )
+                if (frame <= duration)
                 {
                     for (int i = 0; i < particleTypes.size(); i++)
                     {
-                        ParticleTypeData& p =
-                            particleTypes[i];
+                        ParticleTypeData& p = particleTypes[i];
 
-                        simulation.uploadParticles(
-                            p,i
-                        );
+                        if (frame % p.interval == 0)
+                        {
+                            simulation.uploadParticles(p, i);
+                        }
                     }
                 }
 

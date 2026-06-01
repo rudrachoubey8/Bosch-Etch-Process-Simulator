@@ -152,11 +152,12 @@ void main()
         step++)
     {
         if(any(lessThan(cell, ivec3(0))) ||
-           any(greaterThanEqual(cell, gridSize)))
+           any(greaterThanEqual(cell, gridSize)) || p.energy < 1)
         {
             p.alive = 0;
             break;
         }
+        
 
         int vidx = voxelIndex(cell);
 
@@ -223,7 +224,7 @@ void main()
             }
 
 
-            if(reflectParticle)
+            if(reflectParticle && !depositParticle)
             {
                 vec3 hitPos =
                     origin + dir * t;
@@ -280,9 +281,8 @@ void main()
                             * abs(invDir[i]);
                     }
                 }
-
+                p.energy *= 0.8;
                 t = 0.0;
-
                 continue;
             }
 

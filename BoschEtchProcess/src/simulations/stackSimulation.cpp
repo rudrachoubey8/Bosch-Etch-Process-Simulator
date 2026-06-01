@@ -2,7 +2,6 @@
 #include "stackSimulations.h"
 
 Simulation stackSimulation() {
-
     Simulation simulation(
         Settings::X,
         Settings::Y,
@@ -39,26 +38,72 @@ Simulation stackSimulation() {
     DX.type = 3;
 
 
-    simulation.initRectangle(SiO2, 0, 0, 0,
-        Settings::X, 20,
-        Settings::X);
+    // Bottom oxide
+    simulation.initRectangle(
+        SiO2,
+        0, 0, 0,
+        Settings::X, 20, Settings::X
+    );
+
+    // Alternating layers
     for (int i = 1; i <= 10; i++)
     {
-        if (i % 2 == 0) {
-            simulation.initRectangle(Si3N4, 0, i * 20, 0,
-                Settings::X, (i + 1) * 20,
-                Settings::X);
+        if (i % 2 == 0)
+        {
+            simulation.initRectangle(
+                Si3N4,
+                0, i * 20, 0,
+                Settings::X, (i + 1) * 20, Settings::X
+            );
         }
-        else {
-            simulation.initRectangle(Si, 0, i * 20, 0,
-                Settings::X, (i + 1) * 20,
-                Settings::X);
+        else
+        {
+            simulation.initRectangle(
+                Si,
+                0, i * 20, 0,
+                Settings::X, (i + 1) * 20, Settings::X
+            );
         }
-
     }
-    simulation.initRectangle(SiO2, 0, 220, 0,
-        Settings::X, 280,
-        Settings::X);
+
+    // Top oxide
+    simulation.initRectangle(
+        SiO2,
+        0, 220, 0,
+        Settings::X, 280, Settings::X
+    );
+
+
+    // ----------------------------------------------------
+    // Create a cylindrical hole (diameter 24, radius 12)
+    // through the top oxide layer
+    // ----------------------------------------------------
+
+    const int radius = 12;
+
+    const int centerX = Settings::X / 2;
+    const int centerZ = Settings::Z / 2;
+
+    for (int x = centerX - radius; x <= centerX + radius; x++)
+    {
+        for (int z = centerZ - radius; z <= centerZ + radius; z++)
+        {
+            int dx = x - centerX;
+            int dz = z - centerZ;
+
+            if (dx * dx + dz * dz <= radius * radius)
+            {
+                for (int y = 220; y < 280; y++)
+                {
+                    simulation.grid.voxels[
+                        x +
+                            y * Settings::X +
+                            z * Settings::X * Settings::Y
+                    ].solid = 0;
+                }
+            }
+        }
+    }
 
     return simulation;
 }
