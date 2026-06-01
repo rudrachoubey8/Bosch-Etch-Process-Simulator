@@ -23,10 +23,8 @@ struct Chunk {
 
     int vertexOffset = 0;
     int vertexCount = 0;
-
+    int generatedCount = 0;
 };
-
-
 
 
 struct ParticleTypeData

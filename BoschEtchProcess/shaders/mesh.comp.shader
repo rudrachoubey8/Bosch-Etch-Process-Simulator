@@ -30,6 +30,7 @@ struct Chunk
     
     uint vertexOffset;
     uint vertexCount;
+    int generatedCount;
 };
 
 

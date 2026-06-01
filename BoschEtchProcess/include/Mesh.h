@@ -2,7 +2,6 @@
 #include <vector>
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
-
 #include "structures.h"
 #include <shader.h>
 
@@ -16,6 +15,7 @@ public:
     void buildMesh(int dirtyCount);   // dispatch compute
     void draw(int dirtyCount);        // render
     void resetChunks();
+    void allocateCount(int dirtyCount);
     void setRenderingProgram(GLuint program);
     void setSSBO(GLuint dirtyIndicesSSBO, GLuint chunkSSBO);
     uint32_t vertCount = 0;
@@ -41,6 +41,7 @@ private:
     GLuint axesProgram = 0;
     GLuint renderProgram = 0;
     GLuint resetChunkProgram = 0;
+    GLuint allocateCountProgram = 0;
     GLuint voxelCountSSBO = 0;
 
 };

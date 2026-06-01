@@ -60,7 +60,7 @@ void Mesh::setSSBO(GLuint ssbo, GLuint ssbo2){
 }
 
 void Mesh::initGPU() {
-    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 24;
+    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 6;
     numChunkX = (grid.X + chunkSize - 1) / chunkSize;
     numChunkY = (grid.Y + chunkSize - 1) / chunkSize;
     numChunkZ = (grid.Z + chunkSize - 1) / chunkSize;
@@ -127,6 +127,9 @@ void Mesh::initGPU() {
     path = "shaders/resetChunks.shader";
     resetChunkProgram = loadComputeProgram(path.c_str());
 
+    path = "shaders/allocateCount.shader";
+    allocateCountProgram = loadComputeProgram(path.c_str());
+
 }
 
 
@@ -136,9 +139,53 @@ void Mesh::resetChunks() {
     glDispatchCompute((numChunkX + 7) / 8, (numChunkY + 7) / 8, (numChunkZ + 7) / 8);
     glMemoryBarrier(GL_ALL_BARRIER_BITS);
 }
+void Mesh::allocateCount(int dirtyCount) {
+
+    glUseProgram(allocateCountProgram);
+
+    glUniform1i(
+        glGetUniformLocation(
+            allocateCountProgram,
+            "dirtyCount"
+        ), dirtyCount
+    );
+    glUniform3i(
+        glGetUniformLocation(
+            allocateCountProgram,
+            "gridSize"
+        ),
+        grid.X,
+        grid.Y,
+        grid.Z
+    );
+
+    glUniform3i(
+        glGetUniformLocation(
+            allocateCountProgram,
+            "chunkGridSize"
+        ),
+        numChunkX,
+        numChunkY,
+        numChunkZ
+    );
+
+    glDispatchCompute(
+        numChunkX * numChunkY * numChunkZ * 4,
+        4,
+        4
+    );
+
+    glMemoryBarrier(
+        GL_SHADER_STORAGE_BARRIER_BIT |
+        GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+    );
+}
 
 void Mesh::buildMesh(int dirtyCount)
 {
+
+    allocateCount(dirtyCount);
+
     vertCount = 0;
 
     uint32_t zero = 0;

@@ -8,6 +8,7 @@ struct Chunk {
     int dirty;
     uint vertexOffset;
     uint vertexCount;
+    int generatedCount;
 };
 
 layout(std430, binding = 6) buffer ChunkBuffer {
