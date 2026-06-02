@@ -58,6 +58,70 @@ void Mesh::setVoxelBuffer(GLuint ssbo){
     voxelSSBO = ssbo;
 }
 
+std::vector<int> Mesh::extractSlice(
+    int dir,
+    int sliceIndex
+)
+{
+    glUseProgram(sliceProgram);
+
+    glUniform3i(
+        glGetUniformLocation(sliceProgram, "gridSize"),
+        grid.X, grid.Y, grid.Z
+    );
+
+    glUniform1i(
+        glGetUniformLocation(sliceProgram, "plane"),
+        dir
+    );
+
+    glUniform1i(
+        glGetUniformLocation(sliceProgram, "sliceIndex"),
+        sliceIndex
+    );
+
+    int width = 0;
+    int height = 0;
+
+    switch (dir)
+    {
+        case 0:
+            width = grid.X;
+            height = grid.Y;
+            break;
+
+        case 1:
+            width = grid.X;
+            height = grid.Z;
+            break;
+
+        case 2:
+            width = grid.Y;
+            height = grid.Z;
+            break;
+    }
+
+    glDispatchCompute(
+        (width + 15) / 16,
+        (height + 15) / 16,
+        1
+    );
+
+    glMemoryBarrier(
+        GL_SHADER_STORAGE_BARRIER_BIT
+    );
+
+    std::vector<int> slice(width * height);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, sliceSSBO);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        slice.size() * sizeof(int),
+        slice.data()
+    );
+    return slice;
+}
 void Mesh::initGPU() {
     const size_t MAX_VERTS = grid.X * grid.Y * grid.Z;
 
@@ -67,6 +131,15 @@ void Mesh::initGPU() {
     glBufferData(
         GL_SHADER_STORAGE_BUFFER,
         MAX_VERTS * sizeof(Vertex),
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
+
+    glGenBuffers(1, &sliceSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, sliceSSBO);
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        1000 * 1000 * sizeof(int),
         nullptr,
         GL_DYNAMIC_DRAW
     );
@@ -97,6 +170,7 @@ void Mesh::initGPU() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 14, voxelCountSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 13, sliceSSBO);
 
     // VAO
     glGenVertexArrays(1, &vao);
@@ -120,6 +194,9 @@ void Mesh::initGPU() {
 
     path = "shaders/axes.shader";
     axesProgram = loadComputeProgram(path.c_str());
+
+    path = "shaders/measure.shader";
+    sliceProgram = loadComputeProgram(path.c_str());
 
 }
 void Mesh::buildMesh() {

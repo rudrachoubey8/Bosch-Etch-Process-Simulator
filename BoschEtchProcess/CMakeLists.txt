@@ -24,6 +24,7 @@ add_executable(BoschEtchProcess
     shaders/mesh.comp.shader
     shaders/particle.init.shader
     shaders/resolveHits.shader
+    shaders/measure.shader
     shaders/vertex.shader
     
     "src/simulations/stackSimulation.cpp" 

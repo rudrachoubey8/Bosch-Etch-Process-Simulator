@@ -600,6 +600,70 @@ void renderMesh(Simulation& simulation) {
 
         ImGui::End();
 
+        static char fileName2[256] = "slice.txt";
+        static int sliceDir = 2;     // 0=XY, 1=XZ, 2=YZ
+        static int sliceIndex = 0;
+
+        if (ImGui::Begin("Slice Export"))
+        {
+            ImGui::InputText("File", fileName2, sizeof(fileName2));
+
+            ImGui::Combo(
+                "Direction",
+                &sliceDir,
+                "XY\0XZ\0YZ\0"
+            );
+
+            ImGui::InputInt("Slice Index", &sliceIndex);
+
+            if (ImGui::Button("Save Slice"))
+            {
+                std::vector<int> slice =
+                    mesh.extractSlice(sliceDir, sliceIndex);
+
+                int width;
+                int height;
+
+                switch (sliceDir)
+                {
+                case 0: // XY
+                    width = Settings::X;
+                    height = Settings::Y;
+                    break;
+
+                case 1: // XZ
+                    width = Settings::X;
+                    height = Settings::Z;
+                    break;
+
+                default: // YZ
+                    width = Settings::Y;
+                    height = Settings::Z;
+                    break;
+                }
+
+                std::ofstream out(fileName2);
+
+                out << width << " "
+                    << height << "\n";
+
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        out << slice[x + y * width];
+
+                        if (x != width - 1)
+                            out << ' ';
+                    }
+
+                    out << '\n';
+                }
+
+                out.close();
+            }
+        }
+        ImGui::End();
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -607,26 +671,6 @@ void renderMesh(Simulation& simulation) {
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        if (frame == duration + 1) {
-            cout << "\n======================================\n";
-            cout << "Time Per Frame: " << tickTime / (duration + 1) << "\n\n";
-            simulation.downloadVoxels();
-            v = simulation.grid.voxels;
-            measure.measure(simulation.grid, Settings::X / 2, 0, Settings::Z / 2, 0, 1, 0);
-            for (int i = 0;i < measure.ZYPlane.size();i++) {
-                if (i % 10 == 0) cout << endl;
-                cout << measure.ZYPlane[i] << ", ";
-            }
-
-            std::vector<float> conv = measure.convolve(measure.ZYPlane, 5);
-            int depth = measure.getDepth(conv);
-
-            cout << endl;
-            cout << "Depth: " << depth;
-            cout << endl;
-            cout << "Width: " << measure.getWidth(conv, depth / 2);
-            cout << endl;
-        }
     }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
