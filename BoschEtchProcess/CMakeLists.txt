@@ -53,3 +53,10 @@ target_link_libraries(BoschEtchProcess PRIVATE
     glfw
     imgui::imgui
 )
+find_package(implot CONFIG REQUIRED)
+
+target_link_libraries(
+    BoschEtchProcess
+    PRIVATE
+    implot::implot
+)

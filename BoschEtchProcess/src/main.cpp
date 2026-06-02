@@ -18,7 +18,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-
+#include "implot.h"
 
 
 using namespace std;
@@ -221,6 +221,41 @@ void renderMesh(Simulation& simulation) {
     
     int selectedParticleType = 0;
     int typesOfParticles = 4;
+    char fileName2[256] = "slice.txt";
+    int sliceDir = 2;     // 0=XY, 1=XZ, 2=YZ
+    int sliceIndex = 0;
+
+    int previewWidth = 0;
+    int previewHeight = 0;
+    GLuint sliceTexture;
+
+    glGenTextures(1, &sliceTexture);
+
+    glBindTexture(GL_TEXTURE_2D, sliceTexture);
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_MIN_FILTER,
+        GL_NEAREST
+    );
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_MAG_FILTER,
+        GL_NEAREST
+    );
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_WRAP_S,
+        GL_CLAMP_TO_EDGE
+    );
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_WRAP_T,
+        GL_CLAMP_TO_EDGE
+    );
 
     std::vector<ParticleTypeData> particleTypes(typesOfParticles);
 
@@ -232,19 +267,24 @@ void renderMesh(Simulation& simulation) {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImPlot::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
 
 
     ImGui::StyleColorsDark();
+    ImPlot::StyleColorsDark();
 
     // Backend init
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 430");
 
+    
+
     while (!glfwWindowShouldClose(window)) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+
 
         //
         // ========================= PARTICLE WINDOW =========================
@@ -600,9 +640,6 @@ void renderMesh(Simulation& simulation) {
 
         ImGui::End();
 
-        static char fileName2[256] = "slice.txt";
-        static int sliceDir = 2;     // 0=XY, 1=XZ, 2=YZ
-        static int sliceIndex = 0;
 
         if (ImGui::Begin("Slice Export"))
         {
@@ -616,56 +653,138 @@ void renderMesh(Simulation& simulation) {
 
             ImGui::InputInt("Slice Index", &sliceIndex);
 
-            if (ImGui::Button("Save Slice"))
+            if (ImGui::Button("Extract Slice"))
             {
                 std::vector<int> slice =
                     mesh.extractSlice(sliceDir, sliceIndex);
 
-                int width;
-                int height;
-
                 switch (sliceDir)
                 {
                 case 0: // XY
-                    width = Settings::X;
-                    height = Settings::Y;
+                    previewWidth = Settings::X;
+                    previewHeight = Settings::Y;
                     break;
 
                 case 1: // XZ
-                    width = Settings::X;
-                    height = Settings::Z;
+                    previewWidth = Settings::X;
+                    previewHeight = Settings::Z;
                     break;
 
                 default: // YZ
-                    width = Settings::Y;
-                    height = Settings::Z;
+                    previewWidth = Settings::Y;
+                    previewHeight = Settings::Z;
                     break;
                 }
 
-                std::ofstream out(fileName2);
+                std::vector<uint32_t> pixels(
+                    previewWidth * previewHeight
+                );
 
-                out << width << " "
-                    << height << "\n";
-
-                for (int y = 0; y < height; y++)
+                for (int i = 0; i < pixels.size(); i++)
                 {
-                    for (int x = 0; x < width; x++)
+                    switch (slice[i])
                     {
-                        out << slice[x + y * width];
+                    case -1:
+                        pixels[i] = 0xFF000000;
+                        break;
 
-                        if (x != width - 1)
-                            out << ' ';
+                    case 0:
+                        pixels[i] = 0xFFFFFFFF;
+                        break;
+
+                    case 1:
+                        pixels[i] = 0xFFFF0000;
+                        break;
+
+                    case 2:
+                        pixels[i] = 0xFF00FF00;
+                        break;
+
+                    default:
+                        pixels[i] = 0xFF0000FF;
+                        break;
                     }
-
-                    out << '\n';
                 }
 
-                out.close();
+                // Update texture
+                glBindTexture(GL_TEXTURE_2D, sliceTexture);
+
+                glTexImage2D(
+                    GL_TEXTURE_2D,
+                    0,
+                    GL_RGBA8,
+                    previewWidth,
+                    previewHeight,
+                    0,
+                    GL_RGBA,
+                    GL_UNSIGNED_BYTE,
+                    pixels.data()
+                );
+
+                // Save slice to file
+                std::ofstream out(fileName2);
+
+                if (out)
+                {
+                    out << previewWidth
+                        << " "
+                        << previewHeight
+                        << "\n";
+
+                    for (int y = 0; y < previewHeight; y++)
+                    {
+                        for (int x = 0; x < previewWidth; x++)
+                        {
+                            out << slice[x + y * previewWidth];
+
+                            if (x != previewWidth - 1)
+                                out << ' ';
+                        }
+
+                        out << '\n';
+                    }
+
+                    out.close();
+                }
             }
+            
         }
         ImGui::End();
+        ImGui::Begin("Graph");
+        if (previewWidth && previewHeight && ImPlot::BeginPlot("Slice", ImVec2(500, 500)))
+        {
+            ImPlot::SetupAxes(
+                "X",
+                (sliceDir == 1) ? "Z" : "Y"
+            );
 
+            ImPlot::PlotImage(
+                "Slice",
+                (ImTextureID)(intptr_t)sliceTexture,
+                ImPlotPoint(0, 0),
+                ImPlotPoint(
+                    previewWidth,
+                    previewHeight
+                )
+            );
+
+            if (ImPlot::IsPlotHovered())
+            {
+                ImPlotPoint p =
+                    ImPlot::GetPlotMousePos();
+
+                ImGui::Text(
+                    "X: %.1f  Y: %.1f",
+                    p.x,
+                    p.y
+                );
+            }
+            ImPlot::EndPlot();
+
+        }
+        ImGui::End();
         ImGui::Render();
+
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window);
