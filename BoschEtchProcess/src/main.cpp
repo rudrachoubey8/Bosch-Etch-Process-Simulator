@@ -751,12 +751,27 @@ void renderMesh(Simulation& simulation) {
         }
         ImGui::End();
         ImGui::Begin("Graph");
-        if (previewWidth && previewHeight && ImPlot::BeginPlot("Slice", ImVec2(500, 500)))
+        if (previewWidth && previewHeight && ImPlot::BeginPlot("Slice"))
         {
             ImPlot::SetupAxes(
                 "X",
                 (sliceDir == 1) ? "Z" : "Y"
             );
+
+            ImPlot::SetupAxisLimits(
+                ImAxis_X1,
+                0,
+                previewWidth,
+                ImGuiCond_Always
+            );
+
+            ImPlot::SetupAxisLimits(
+                ImAxis_Y1,
+                0,
+                previewHeight,
+                ImGuiCond_Always
+            );
+
 
             ImPlot::PlotImage(
                 "Slice",

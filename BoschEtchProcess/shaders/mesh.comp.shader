@@ -122,8 +122,6 @@ void main()
 {
     ivec3 p = ivec3(gl_GlobalInvocationID);
 
-    if(p.x < gridSize.x / 2) return;
-     
     if(!inBounds(p.x,p.y,p.z))
         return;
 
