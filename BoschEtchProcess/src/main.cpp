@@ -637,6 +637,12 @@ void renderMesh(Simulation& simulation) {
         ImGui::Text("Simulation");
 
         ImGui::Text("Total Voxels: %d", mesh.voxelCount);
+        ImGui::Text("Axes:");
+
+        ImGui::TextColored(ImVec4(1, 0, 0, 1), "X Axis");
+        ImGui::TextColored(ImVec4(0, 0, 1, 1), "Y Axis");
+        ImGui::TextColored(ImVec4(1, 1, 0, 1), "Z Axis");
+
 
         ImGui::End();
 

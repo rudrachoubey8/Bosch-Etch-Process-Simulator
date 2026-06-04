@@ -123,7 +123,7 @@ std::vector<int> Mesh::extractSlice(
     return slice;
 }
 void Mesh::initGPU() {
-    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z;
+    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 6;
 
     // vertex SSBO
     glGenBuffers(1, &vertexSSBO);
@@ -229,28 +229,22 @@ void Mesh::buildMesh() {
         );
 
 
-
     glUseProgram(axesProgram);
     glUniform3i(
         glGetUniformLocation(axesProgram, "gridSize"),
-        grid.X/10, grid.Y, grid.Z/10
+        grid.X / 10, grid.Y, grid.Z / 10
     );
     glUniform1i(
         glGetUniformLocation(axesProgram, "size"),
         20
     );
-    glDispatchCompute(
-        (grid.X + 7) / 8,
-        (1 + 7) / 8,
-        (grid.Z + 7) / 8
-    );
 
+    glDispatchCompute(1, 1, 1);
 
     glMemoryBarrier(
         GL_SHADER_STORAGE_BARRIER_BIT |
         GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
     );
-
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
     glGetBufferSubData(
         GL_SHADER_STORAGE_BUFFER,

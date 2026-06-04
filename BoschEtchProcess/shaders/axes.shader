@@ -45,19 +45,57 @@ void emitQuad(vec3 base, vec3 du, vec3 dv, vec3 normal, vec3 color) {
     verts[i+4] = Vertex(base + du + dv,  normal, color);
     verts[i+5] = Vertex(base + dv,       normal, color);
 }
+void main()
+{
+    if(gl_GlobalInvocationID.x != 0 ||
+       gl_GlobalInvocationID.y != 0 ||
+       gl_GlobalInvocationID.z != 0)
+        return;
 
-void main(){
-    
-    ivec3 p = ivec3(gl_GlobalInvocationID);
+    float extent = 1000.0;
+    float axisWidth = 2.0;
 
-    if(p.x >= gridSize.x || p.y >= gridSize.y || p.z >= gridSize.z) return;
-
+    //
+    // Ground plane
+    //
     emitQuad(
-        vec3(p.x * size - gridSize.x * size / 2 + gridSize.x/2, -1, p.z * size - gridSize.z * size/2 + gridSize.z / 2), 
-        size * vec3(1,0,0), 
-        size * vec3(0,0,1), 
-        vec3(0,1,0), 
+        vec3(0,0,0),
+        vec3(extent,0,0),
+        vec3(0,0,extent),
+        vec3(0,1,0),
         vec3(1,1,1)
     );
 
+    //
+    // X axis (red)
+    //
+    emitQuad(
+        vec3(0,-axisWidth, -axisWidth),
+        vec3(extent,0,0),
+        vec3(0,0,axisWidth*2),
+        vec3(0,1,0),
+        vec3(1,0,0)
+    );
+
+    //
+    // Y axis (blue)
+    //
+    emitQuad(
+        vec3(-axisWidth,0,-axisWidth),
+        vec3(0,extent,0),
+        vec3(axisWidth*2,0,0),
+        vec3(0,0,1),
+        vec3(0,0,1)
+    );
+
+    //
+    // Z axis (yellow)
+    //
+    emitQuad(
+        vec3(-axisWidth,-axisWidth,0),
+        vec3(axisWidth*2,0,0),
+        vec3(0,0,extent),
+        vec3(0,1,0),
+        vec3(1,1,0)
+    );
 }
