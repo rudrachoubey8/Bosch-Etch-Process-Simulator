@@ -206,10 +206,56 @@ void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9]) {
         1, GL_TRUE, viewMatrix
     );
 
+    // Project cuboid corners to screen space and find 2D AABB
+    float halfX = (grid.X / 300.0f) * 0.5f;
+    float halfY = (grid.Y / 300.0f) * 0.5f;
+    float halfZ = (grid.Z / 300.0f) * 0.5f;
+
+    // Center is (0,0,0) so corners are just ±half extents
+    float corners[8][3] = {
+        {-halfX, -halfY, -halfZ}, { halfX, -halfY, -halfZ},
+        {-halfX,  halfY, -halfZ}, { halfX,  halfY, -halfZ},
+        {-halfX, -halfY,  halfZ}, { halfX, -halfY,  halfZ},
+        {-halfX,  halfY,  halfZ}, { halfX,  halfY,  halfZ},
+    };
+
+    float minSX = 1e9f, minSY = 1e9f;
+    float maxSX = -1e9f, maxSY = -1e9f;
+
+    for (auto& c : corners) {
+        // Transform by viewMatrix (row-major, so multiply row-vector * matrix)
+        float vx = viewMatrix[0] * c[0] + viewMatrix[1] * c[1] + viewMatrix[2] * c[2];
+        float vy = viewMatrix[3] * c[0] + viewMatrix[4] * c[1] + viewMatrix[5] * c[2];
+        float vz = viewMatrix[6] * c[0] + viewMatrix[7] * c[1] + viewMatrix[8] * c[2];
+
+        // vz here is depth along view direction; if using a pinhole-style
+        // projection you need focal length — adjust focalLen to match your shader
+        float focalLen = 1.0f; // same value your shader uses
+        if (vz <= 0.001f) { minSX = -1; minSY = -1; maxSX = 2; maxSY = 2; break; }
+
+        float sx = (vx / vz) * focalLen;  // NDC-ish [-1, 1]
+        float sy = (vy / vz) * focalLen;
+
+        minSX = std::min(minSX, sx); maxSX = std::max(maxSX, sx);
+        minSY = std::min(minSY, sy); maxSY = std::max(maxSY, sy);
+    }
+
+    // Convert NDC to pixel coords, clamp to screen
+    int pxMin = std::max(0, (int)std::floor((minSX * 0.5f + 0.5f) * width));
+    int pyMin = std::max(0, (int)std::floor((minSY * 0.5f + 0.5f) * height));
+    int pxMax = std::min(width, (int)std::ceil((maxSX * 0.5f + 0.5f) * width));
+    int pyMax = std::min(height, (int)std::ceil((maxSY * 0.5f + 0.5f) * height));
+
+    int tileW = pxMax - pxMin;
+    int tileH = pyMax - pyMin;
+    if (tileW <= 0 || tileH <= 0) return; // cuboid off screen
+
+    // Pass tile origin so shader reconstructs correct pixel coords
+    glUniform2i(glGetUniformLocation(computeProgram, "tileOffset"), pxMin, pyMin);
 
     glDispatchCompute(
-        (width+15)/16,
-        (height+15)/16,
+        (tileW + 15) / 16,
+        (tileH + 15) / 16,
         1
     );
     glMemoryBarrier(

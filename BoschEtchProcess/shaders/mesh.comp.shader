@@ -21,6 +21,7 @@ layout(rgba8, binding = 4) uniform writeonly image2D outputImage;
 uniform ivec3 gridSize;
 uniform vec3 bounds;
 uniform vec3 center;
+uniform ivec2 tileOffset;
 
 uniform vec3 rayOrigin;
 uniform mat3 viewMatrix;
@@ -123,7 +124,7 @@ vec2 rayAABB(vec3 ro, vec3 rd, vec3 boxMin, vec3 boxMax)
 
 void main()
 {
-    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 pixel = tileOffset + ivec2(gl_GlobalInvocationID.xy);
     ivec2 screenSize = imageSize(outputImage);
 
     if (pixel.x >= screenSize.x || pixel.y >= screenSize.y)
@@ -154,7 +155,7 @@ void main()
     float t = max(tHit.x, 0.0) + stepSize * 0.01;
     float tMax = tHit.y;
 
-    for (int i = 0; i < 256; i++)
+    for (int i = 0; i < 512; i++)
     {
         if (t > tMax) break;
 
