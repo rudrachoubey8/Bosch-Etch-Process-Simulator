@@ -148,40 +148,7 @@ void renderMesh(Simulation& simulation) {
         "shaders/vertex.shader",
         "shaders/fragment.shader"
     );
-
-    glUseProgram(shader.shaderProgram);
-
-    // MATRICES
-    float aspect = float(width) / float(height);
-    float nearP = -10.0f;
-    float farP = 10.0f;
-
-    float Projection[16] = {
-        1.0f / aspect, 0, 0, 0,
-        0, 1.0f, 0, 0,
-        0, 0, -2.0f / (farP - nearP), -(farP + nearP) / (farP - nearP),
-        0, 0, 0, 1
-    };
-
-    float Transform[16] = {
-        1, 0,  0, -Settings::X / 2,
-        0, 1,  0, -Settings::Y / 2,
-        0, 0,  1, -Settings::Z / 2,
-        0, 0,  0, 1
-    };
-
-    // Initialize Matrices
-    glUniformMatrix4fv(
-        glGetUniformLocation(shader.shaderProgram, "Projection"),
-        1, GL_TRUE, Projection
-    );
-
-    glUniformMatrix4fv(
-        glGetUniformLocation(shader.shaderProgram, "Transform"),
-        1, GL_TRUE, Transform
-    );
     
-
     // Inititalize Mesh 
     Mesh mesh(simulation.grid);
 
@@ -194,7 +161,7 @@ void renderMesh(Simulation& simulation) {
     vector<Voxel> v = simulation.grid.voxels;
     
     mesh.setVoxelBuffer(simulation.voxelSSBO);
-    mesh.buildMesh();
+    //mesh.buildMesh(rayOrigin, viewMatrix);
 
     int frame = 0;
     double tickTime = 0;
@@ -291,6 +258,59 @@ void renderMesh(Simulation& simulation) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        float cy = cos(yaw);
+        float sy = sin(yaw);
+
+        float cx = cos(pitch);
+        float sx = sin(pitch);
+
+
+
+        float rayOrigin[3] = {
+            D * cx * sin(yaw),
+            D * sx,
+            D * cx * cos(yaw)
+        };
+
+        // Center of the voxel grid in world space
+        float centerX = 0;
+        float centerY = 0;
+        float centerZ = 0;
+
+        // Orbit: place camera on a sphere around center
+        float camX = centerX + D * cos(pitch) * sin(yaw);
+        float camY = centerY + D * sin(pitch);
+        float camZ = centerZ + D * cos(pitch) * cos(yaw);
+
+        float rayOriginArr[3] = { camX, camY, camZ };
+
+        // Forward = camera -> center (always looks at the mesh)
+        float fx = centerX - camX;
+        float fy = centerY - camY;
+        float fz = centerZ - camZ;
+        float fLen = sqrt(fx * fx + fy * fy + fz * fz);
+        fx /= fLen; fy /= fLen; fz /= fLen;
+
+        // Right = cross(forward, world_up)
+        float rx = fz;
+        float ry = 0.0f;
+        float rz = -fx;
+        float rLen = sqrt(rx * rx + rz * rz);
+        if (rLen > 0.0001f) { rx /= rLen; rz /= rLen; }
+
+        // Up = cross(right, forward)
+        float ux = ry * fz - rz * fy;
+        float uy = rz * fx - rx * fz;
+        float uz = rx * fy - ry * fx;
+
+        // Column-major mat3
+        float viewMatrix[9] = {
+            rx, -ux, fx,
+            ry, -uy, fy,
+            rz, -uz, fz
+        };
+
+
 
         //
         // ========================= PARTICLE WINDOW =========================
@@ -342,7 +362,7 @@ void renderMesh(Simulation& simulation) {
 
             mesh.initGPU();
             mesh.setVoxelBuffer(simulation.voxelSSBO);
-            mesh.buildMesh();
+            mesh.buildMesh(rayOrigin, viewMatrix);
         }
 
         ImGui::End();
@@ -533,7 +553,7 @@ void renderMesh(Simulation& simulation) {
 
                     mesh.initGPU();
                     mesh.setVoxelBuffer(simulation.voxelSSBO);
-                    mesh.buildMesh();
+                    mesh.buildMesh(rayOrigin, viewMatrix);
 
                     std::cout << "Loaded grid + settings from: "
                         << gridFilename << std::endl;
@@ -611,7 +631,7 @@ void renderMesh(Simulation& simulation) {
                             simulation.voxelSSBO
                         );
 
-                        mesh.buildMesh();
+                        mesh.buildMesh(rayOrigin, viewMatrix);
 
                         std::cout
                             << "Simulation loaded from "
@@ -648,35 +668,6 @@ void renderMesh(Simulation& simulation) {
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        float cy = cos(yaw);
-        float sy = sin(yaw);
-
-        float cx = cos(pitch);
-        float sx = sin(pitch);
-
-        float Rotate[16] = {
-            cy,        0,     sy, 0,
-            sx * sy,     cx,   -sx * cy, 0,
-           -cx * sy,     sx,    cx * cy, 0,
-            0,         0,     0, 1
-        };
-
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader.shaderProgram, "Rotate"),
-            1, GL_TRUE, Rotate
-        );
-        float scale = 2.0f / (100.0f * D);
-
-        float Size[16] = {
-            scale,0,0,0,
-            0,scale,0,0,
-            0,0,scale,0,
-            0,0,0,1
-        };
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader.shaderProgram, "Size"),
-            1, GL_TRUE, Size
-        );
 
         static auto previousTime = Clock::now();
 
@@ -731,7 +722,7 @@ void renderMesh(Simulation& simulation) {
         }
         if (draw) {
             if (draw && frame % 10 == 0) {
-                mesh.buildMesh();
+                mesh.buildMesh(rayOrigin, viewMatrix);
             }
             mesh.draw();
         }

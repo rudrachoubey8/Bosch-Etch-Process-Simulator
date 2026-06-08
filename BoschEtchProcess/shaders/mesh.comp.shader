@@ -21,8 +21,9 @@ layout(rgba8, binding = 4) uniform writeonly image2D outputImage;
 uniform ivec3 gridSize;
 uniform vec3 bounds;
 uniform vec3 center;
-uniform vec3 rayOrigin;
 
+uniform vec3 rayOrigin;
+uniform mat3 viewMatrix;
 
 int idx(int x, int y, int z)
 {
@@ -61,7 +62,6 @@ vec3 colorFromType(int t)
 // with Gaussian-weighted Sobel for much softer shading
 vec3 voxelNormal(ivec3 p)
 {
-    // Sobel weights: center=2, diagonal=1
     float nx = 0.0, ny = 0.0, nz = 0.0;
 
     for(int dz = -1; dz <= 1; dz++)
@@ -133,31 +133,27 @@ void main()
     uv.x *= float(screenSize.x) / float(screenSize.y);
 
     vec3 screenPos = vec3(uv.x, uv.y, 0.0);
-    vec3 rayDir = normalize(screenPos - rayOrigin);
+    vec3 rayDir = normalize(viewMatrix * vec3(uv.x, uv.y, 1.0));
 
     float voxelSize = bounds.x / float(gridSize.x);
     float stepSize  = voxelSize * 0.5;
 
     vec4 outColor = vec4(0, 0, 0, 1);
 
-    // --- Jump straight to the grid with AABB intersection ---
     vec3 boxMin = center - bounds * 0.5;
     vec3 boxMax = center + bounds * 0.5;
 
     vec2 tHit = rayAABB(rayOrigin, rayDir, boxMin, boxMax);
 
-    // Miss or box is behind us
     if (tHit.x > tHit.y || tHit.y < 0.0)
     {
         imageStore(outputImage, pixel, outColor);
         return;
     }
 
-    // Start just inside the box entry face (clamp for rays starting inside)
     float t = max(tHit.x, 0.0) + stepSize * 0.01;
     float tMax = tHit.y;
 
-    // --- Small steps only inside the grid ---
     for (int i = 0; i < 256; i++)
     {
         if (t > tMax) break;
@@ -174,16 +170,12 @@ void main()
             vec3 N = voxelNormal(voxel);
             vec3 L = normalize(rayOrigin - p);
             vec3 V = -rayDir;
-            vec3 H = normalize(L + V); // halfway vector for specular
+            vec3 H = normalize(L + V);
 
-            // Diffuse
             float diffuse = max(dot(N, L), 0.0);
 
-            // Specular (Blinn-Phong)
             float specular = pow(max(dot(N, H), 0.0), 32.0) * 0.4;
 
-            // Ambient occlusion approximation —
-            // count solid neighbours, more neighbours = darker
             float occlusion = 0.0;
             for(int oz = -1; oz <= 1; oz++)
             for(int oy = -1; oy <= 1; oy++)
@@ -206,9 +198,8 @@ void main()
                 baseColor * (ambient + diffuse) * occlusion
                 + specular;
 
-            // Depth fog — softens the hard silhouette edges
             float fog = exp(-t * 0.08);
-            vec3 fogColor = vec3(0.05, 0.05, 0.08); // match your clear color
+            vec3 fogColor = vec3(0.05, 0.05, 0.08); 
             color = mix(fogColor, color, fog);
 
             outColor = vec4(color, 1.0);

@@ -172,7 +172,7 @@ void Mesh::initGPU() {
     sliceProgram = loadComputeProgram(path.c_str());
 
 }
-void Mesh::buildMesh() {
+void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9]) {
 
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
@@ -190,15 +190,20 @@ void Mesh::buildMesh() {
         glGetUniformLocation(computeProgram, "bounds"),
         grid.X/300.0f, grid.Y/300.0f, grid.Z/300.0f
     );
+
     glUniform3f(
         glGetUniformLocation(computeProgram, "center"),
         0,0,0
     );
 
-
     glUniform3f(
         glGetUniformLocation(computeProgram, "rayOrigin"),
-        0, 0, -1.0f
+        rayOrigin[0], rayOrigin[1], rayOrigin[2]
+    );
+
+    glUniformMatrix3fv(
+        glGetUniformLocation(computeProgram, "viewMatrix"),
+        1, GL_TRUE, viewMatrix
     );
 
 
