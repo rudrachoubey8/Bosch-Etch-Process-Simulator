@@ -1,6 +1,6 @@
 #version 430
 
-layout(local_size_x=8, local_size_y=8, local_size_z=8) in;
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 struct Voxel
 {
@@ -11,233 +11,213 @@ struct Voxel
     int type;
 };
 
-struct Vertex
-{
-    vec3 pos;
-    vec3 normal;
-    vec3 color;
-};
-
 layout(std430, binding = 6) readonly buffer Voxels
 {
     Voxel voxels[];
 };
 
-layout(std430, binding = 1) writeonly buffer Vertices
-{
-    Vertex verts[];
-};
-
-layout(std430, binding = 14) buffer VoxelCounter
-{
-    uint voxelCount;
-};
-
-layout(std430, binding = 2) buffer Counter
-{
-    uint vertCount;
-};
+layout(rgba8, binding = 4) uniform writeonly image2D outputImage;
 
 uniform ivec3 gridSize;
+uniform vec3 bounds;
+uniform vec3 center;
+uniform vec3 rayOrigin;
 
-int idx(int x,int y,int z)
+
+int idx(int x, int y, int z)
 {
-    return x +
-           y * gridSize.x +
-           z * gridSize.x * gridSize.y;
+    return x + y * gridSize.x + z * gridSize.x * gridSize.y;
 }
 
-bool inBounds(int x,int y,int z)
+bool inBounds(int x, int y, int z)
 {
-    return
-        x >= 0 && y >= 0 && z >= 0 &&
-        x < gridSize.x &&
-        y < gridSize.y &&
-        z < gridSize.z;
+    return x >= 0 && y >= 0 && z >= 0 &&
+           x < gridSize.x && y < gridSize.y && z < gridSize.z;
 }
 
-bool solidAt(int x,int y,int z)
+bool solidAt(int x, int y, int z)
 {
-    if(!inBounds(x,y,z))
-        return false;
-
-    return voxels[idx(x,y,z)].solid != 0;
+    if (!inBounds(x, y, z)) return false;
+    return voxels[idx(x, y, z)].solid != 0;
 }
 
-int typeAt(int x,int y,int z)
+int typeAt(int x, int y, int z)
 {
-    if(!inBounds(x,y,z))
-        return -1;
-
-    return voxels[idx(x,y,z)].type;
+    if (!inBounds(x, y, z)) return 0;
+    return voxels[idx(x, y, z)].type;
 }
 
 vec3 colorFromType(int t)
 {
-    if(t == 0) return vec3(1.0,0.647,0.0);
-    if(t == 1) return vec3(0.0,1.0,0.0);
-    if(t == 2) return vec3(0.5,0.0,0.5);
-    if(t == 3) return vec3(0.0,1.0,1.0);
-
+    if (t == 0) return vec3(1.0, 0.647, 0.0);
+    if (t == 1) return vec3(0.0, 1.0, 0.0);
+    if (t == 2) return vec3(0.5, 0.0, 0.5);
+    if (t == 3) return vec3(0.0, 1.0, 1.0);
     return vec3(1.0);
 }
 
-void writeFace(
-    uint i,
-    vec3 base,
-    vec3 du,
-    vec3 dv,
-    vec3 normal,
-    vec3 color
-)
+
+// Wider trilinear normal — samples a 3x3x3 neighbourhood
+// with Gaussian-weighted Sobel for much softer shading
+vec3 voxelNormal(ivec3 p)
 {
-    bool flip =
-        normal.x < 0.0 ||
-        normal.y < 0.0 ||
-        normal.z < 0.0;
+    // Sobel weights: center=2, diagonal=1
+    float nx = 0.0, ny = 0.0, nz = 0.0;
 
-    if(!flip)
+    for(int dz = -1; dz <= 1; dz++)
+    for(int dy = -1; dy <= 1; dy++)
+    for(int dx = -1; dx <= 1; dx++)
     {
-        verts[i+0] = Vertex(base,           normal, color);
-        verts[i+1] = Vertex(base + du,      normal, color);
-        verts[i+2] = Vertex(base + du + dv, normal, color);
+        float w =
+            (abs(dx) == 0 ? 2.0 : 1.0) *
+            (abs(dy) == 0 ? 2.0 : 1.0) *
+            (abs(dz) == 0 ? 2.0 : 1.0);
 
-        verts[i+3] = Vertex(base,           normal, color);
-        verts[i+4] = Vertex(base + du + dv, normal, color);
-        verts[i+5] = Vertex(base + dv,      normal, color);
+        float s = float(solidAt(
+            p.x + dx,
+            p.y + dy,
+            p.z + dz
+        ));
+
+        nx += dx * w * s;
+        ny += dy * w * s;
+        nz += dz * w * s;
     }
-    else
+
+    vec3 n = vec3(nx, ny, nz);
+
+    if(length(n) < 0.0001)
     {
-        verts[i+0] = Vertex(base,           normal, color);
-        verts[i+1] = Vertex(base + du + dv, normal, color);
-        verts[i+2] = Vertex(base + du,      normal, color);
+        // boundary fallback from before
+        vec3 distToMin = vec3(p) / vec3(gridSize);
+        vec3 distToMax = 1.0 - distToMin;
+        vec3 dist = min(distToMin, distToMax);
 
-        verts[i+3] = Vertex(base,           normal, color);
-        verts[i+4] = Vertex(base + dv,      normal, color);
-        verts[i+5] = Vertex(base + du + dv, normal, color);
+        int axis = 0;
+        if(dist.y < dist.x && dist.y < dist.z) axis = 1;
+        if(dist.z < dist.x && dist.z < dist.y) axis = 2;
+
+        vec3 fallback = vec3(0.0);
+        if(axis == 0) fallback.x = (distToMin.x < distToMax.x) ? -1.0 : 1.0;
+        if(axis == 1) fallback.y = (distToMin.y < distToMax.y) ? -1.0 : 1.0;
+        if(axis == 2) fallback.z = (distToMin.z < distToMax.z) ? -1.0 : 1.0;
+
+        return fallback;
     }
+
+    return normalize(-n);
+}
+
+
+vec2 rayAABB(vec3 ro, vec3 rd, vec3 boxMin, vec3 boxMax)
+{
+    vec3 invDir = 1.0 / rd;
+    vec3 t0 = (boxMin - ro) * invDir;
+    vec3 t1 = (boxMax - ro) * invDir;
+    vec3 tMin = min(t0, t1);
+    vec3 tMax = max(t0, t1);
+    float tEnter = max(max(tMin.x, tMin.y), tMin.z);
+    float tExit  = min(min(tMax.x, tMax.y), tMax.z);
+    return vec2(tEnter, tExit);
 }
 
 void main()
 {
-    ivec3 p = ivec3(gl_GlobalInvocationID);
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 screenSize = imageSize(outputImage);
 
-    if(!inBounds(p.x,p.y,p.z))
+    if (pixel.x >= screenSize.x || pixel.y >= screenSize.y)
         return;
 
-    if(!solidAt(p.x,p.y,p.z))
+    vec2 uv = (vec2(pixel) / vec2(screenSize)) * 2.0 - 1.0;
+    uv.x *= float(screenSize.x) / float(screenSize.y);
+
+    vec3 screenPos = vec3(uv.x, uv.y, 0.0);
+    vec3 rayDir = normalize(screenPos - rayOrigin);
+
+    float voxelSize = bounds.x / float(gridSize.x);
+    float stepSize  = voxelSize * 0.5;
+
+    vec4 outColor = vec4(0, 0, 0, 1);
+
+    // --- Jump straight to the grid with AABB intersection ---
+    vec3 boxMin = center - bounds * 0.5;
+    vec3 boxMax = center + bounds * 0.5;
+
+    vec2 tHit = rayAABB(rayOrigin, rayDir, boxMin, boxMax);
+
+    // Miss or box is behind us
+    if (tHit.x > tHit.y || tHit.y < 0.0)
+    {
+        imageStore(outputImage, pixel, outColor);
         return;
-
-    atomicAdd(voxelCount, 1u);
-
-    bool px = !solidAt(p.x + 1, p.y, p.z);
-    bool nx = !solidAt(p.x - 1, p.y, p.z);
-
-    bool py = !solidAt(p.x, p.y + 1, p.z);
-    bool ny = !solidAt(p.x, p.y - 1, p.z);
-
-    bool pz = !solidAt(p.x, p.y, p.z + 1);
-    bool nz = !solidAt(p.x, p.y, p.z - 1);
-
-    if(!(px || nx || py || ny || pz || nz))
-        return;
-
-    uint faceCount = 0u;
-
-    faceCount += uint(px);
-    faceCount += uint(nx);
-    faceCount += uint(py);
-    faceCount += uint(ny);
-    faceCount += uint(pz);
-    faceCount += uint(nz);
-
-    uint v = atomicAdd(vertCount, faceCount * 6u);
-
-    vec3 color = colorFromType(typeAt(p.x,p.y,p.z));
-
-    vec3 pos = vec3(p);
-
-    // +X
-    if(px)
-    {
-        writeFace(
-            v,
-            pos + vec3(1,0,0),
-            vec3(0,1,0),
-            vec3(0,0,1),
-            vec3(1,0,0),
-            color
-        );
-        v += 6;
     }
 
-    // -X
-    if(nx)
+    // Start just inside the box entry face (clamp for rays starting inside)
+    float t = max(tHit.x, 0.0) + stepSize * 0.01;
+    float tMax = tHit.y;
+
+    // --- Small steps only inside the grid ---
+    for (int i = 0; i < 256; i++)
     {
-        writeFace(
-            v,
-            pos,
-            vec3(0,1,0),
-            vec3(0,0,1),
-            vec3(-1,0,0),
-            color
-        );
-        v += 6;
+        if (t > tMax) break;
+
+        vec3 p = rayOrigin + rayDir * t;
+
+        vec3 local = (p - boxMin) / bounds;
+        ivec3 voxel = ivec3(local * vec3(gridSize));
+
+        if (!inBounds(voxel.x, voxel.y, voxel.z))
+            break;
+        if(solidAt(voxel.x, voxel.y, voxel.z))
+        {
+            vec3 N = voxelNormal(voxel);
+            vec3 L = normalize(rayOrigin - p);
+            vec3 V = -rayDir;
+            vec3 H = normalize(L + V); // halfway vector for specular
+
+            // Diffuse
+            float diffuse = max(dot(N, L), 0.0);
+
+            // Specular (Blinn-Phong)
+            float specular = pow(max(dot(N, H), 0.0), 32.0) * 0.4;
+
+            // Ambient occlusion approximation —
+            // count solid neighbours, more neighbours = darker
+            float occlusion = 0.0;
+            for(int oz = -1; oz <= 1; oz++)
+            for(int oy = -1; oy <= 1; oy++)
+            for(int ox = -1; ox <= 1; ox++)
+                occlusion += float(solidAt(
+                    voxel.x + ox,
+                    voxel.y + oy,
+                    voxel.z + oz
+                ));
+
+            occlusion = 1.0 - (occlusion / 27.0) * 0.6;
+
+            float ambient = 0.15;
+
+            vec3 baseColor = colorFromType(
+                typeAt(voxel.x, voxel.y, voxel.z)
+            );
+
+            vec3 color =
+                baseColor * (ambient + diffuse) * occlusion
+                + specular;
+
+            // Depth fog — softens the hard silhouette edges
+            float fog = exp(-t * 0.08);
+            vec3 fogColor = vec3(0.05, 0.05, 0.08); // match your clear color
+            color = mix(fogColor, color, fog);
+
+            outColor = vec4(color, 1.0);
+            break;
+        }
+        
+
+        t += stepSize;
     }
 
-    // +Y
-    if(py)
-    {
-        writeFace(
-            v,
-            pos + vec3(0,1,0),
-            vec3(1,0,0),
-            vec3(0,0,1),
-            vec3(0,1,0),
-            color
-        );
-        v += 6;
-    }
-
-    // -Y
-    if(ny)
-    {
-        writeFace(
-            v,
-            pos,
-            vec3(1,0,0),
-            vec3(0,0,1),
-            vec3(0,-1,0),
-            color
-        );
-        v += 6;
-    }
-
-    // +Z
-    if(pz)
-    {
-        writeFace(
-            v,
-            pos + vec3(0,0,1),
-            vec3(1,0,0),
-            vec3(0,1,0),
-            vec3(0,0,1),
-            color
-        );
-        v += 6;
-    }
-
-    // -Z
-    if(nz)
-    {
-        writeFace(
-            v,
-            pos,
-            vec3(1,0,0),
-            vec3(0,1,0),
-            vec3(0,0,-1),
-            color
-        );
-        v += 6;
-    }
+    imageStore(outputImage, pixel, outColor);
 }

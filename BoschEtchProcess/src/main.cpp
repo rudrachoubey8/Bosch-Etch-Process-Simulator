@@ -1,3 +1,5 @@
+
+#include <windows.h>
 #include <iostream>
 #include <random>
 #include <cmath>
@@ -19,6 +21,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "implot.h"
+
 
 
 using namespace std;
@@ -140,7 +143,6 @@ void renderMesh(Simulation& simulation) {
 
     glDisable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     Shader shader(
         "shaders/vertex.shader",
@@ -262,6 +264,10 @@ void renderMesh(Simulation& simulation) {
     vector<float> gridData(typesOfParticles * typesOfVoxels * 3, 0.0f);
 
     static char gridFilename[256] = "grid.dat";
+    static char dllFile[256] = "stack.dll";
+
+    static HMODULE simulationDLL = nullptr;
+
     simulation.tick(gridData, typesOfVoxels, typesOfParticles);
 
 
@@ -406,6 +412,7 @@ void renderMesh(Simulation& simulation) {
         
         ImGui::Begin("Grid Save/Load");
 
+
         ImGui::InputText("Filename", gridFilename, IM_ARRAYSIZE(gridFilename));
         if (ImGui::Button("Save Grid"))
         {
@@ -538,6 +545,104 @@ void renderMesh(Simulation& simulation) {
                 }
             }
         }
+
+        ImGui::Separator();
+        
+        ImGui::InputText(
+            "DLL File",
+            dllFile,
+            sizeof(dllFile)
+        );
+
+        if (ImGui::Button("Load Simulation"))
+        {
+            try
+            {
+                // unload previous dll
+                if (simulationDLL)
+                {
+                    FreeLibrary(simulationDLL);
+                    simulationDLL = nullptr;
+                }
+
+                simulationDLL = LoadLibraryA(dllFile);
+
+                if (!simulationDLL)
+                {
+                    std::cout
+                        << "Failed to load DLL: "
+                        << dllFile
+                        << std::endl;
+                }
+                else
+                {
+                    using CreateSimulationFn =
+                        Simulation(*)();
+
+                    CreateSimulationFn createSimulation =
+                        (CreateSimulationFn)
+                        GetProcAddress(
+                            simulationDLL,
+                            "CreateSimulation"
+                        );
+
+                    if (!createSimulation)
+                    {
+                        std::cout
+                            << "CreateSimulation not found"
+                            << std::endl;
+
+                        FreeLibrary(simulationDLL);
+                        simulationDLL = nullptr;
+                    }
+                    else
+                    {
+                        simulation = createSimulation();
+
+                        simulation.createBuffers();
+
+                        simulation.uploadVoxels(
+                            simulation.grid.voxels
+                        );
+
+                        mesh.initGPU();
+
+                        mesh.setVoxelBuffer(
+                            simulation.voxelSSBO
+                        );
+
+                        mesh.buildMesh();
+
+                        std::cout
+                            << "Simulation loaded from "
+                            << dllFile
+                            << std::endl;
+                    }
+                }
+            }
+            catch (...)
+            {
+                std::cout
+                    << "Exception while loading simulation"
+                    << std::endl;
+            }
+        }
+
+        if (simulationDLL)
+        {
+            ImGui::TextColored(
+                ImVec4(0, 1, 0, 1),
+                "DLL Loaded"
+            );
+        }
+        else
+        {
+            ImGui::TextColored(
+                ImVec4(1, 0, 0, 1),
+                "No DLL Loaded"
+            );
+        }
+
 
         ImGui::End();
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);

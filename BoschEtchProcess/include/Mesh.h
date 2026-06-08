@@ -19,24 +19,23 @@ public:
     void setVoxelBuffer(GLuint ssbo);
     std::vector<int> extractSlice(int dir, int sliceIndex);
 
-
-    uint32_t vertCount = 0;
     int voxelCount = 0;
 
 private:
+
+    int width = 1080;
+    int height = 720;
+
     Grid& grid;
 
     GLuint voxelSSBO = 0;
-    GLuint vertexSSBO = 0;
-    GLuint counterSSBO = 0;
     GLuint sliceSSBO = 0;
+    GLuint screenTexture;
 
     GLuint vao = 0;
     GLuint computeProgram = 0;
-    GLuint axesProgram = 0;
     GLuint renderProgram = 0;
     GLuint sliceProgram = 0;
-    GLuint maskSSBO = 0;
     GLuint voxelCountSSBO = 0;
 
 };

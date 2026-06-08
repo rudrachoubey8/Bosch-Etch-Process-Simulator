@@ -44,8 +44,6 @@ Mesh::Mesh(Grid& g) : grid(g) {}
 
 Mesh::~Mesh() {
     glDeleteBuffers(1, &voxelSSBO);
-    glDeleteBuffers(1, &vertexSSBO);
-    glDeleteBuffers(1, &counterSSBO);
     glDeleteVertexArrays(1, &vao);
     glDeleteProgram(computeProgram);
 }
@@ -123,17 +121,13 @@ std::vector<int> Mesh::extractSlice(
     return slice;
 }
 void Mesh::initGPU() {
-    const size_t MAX_VERTS = grid.X * grid.Y * grid.Z * 6;
 
-    // vertex SSBO
-    glGenBuffers(1, &vertexSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, vertexSSBO);
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        MAX_VERTS * sizeof(Vertex),
-        nullptr,
-        GL_DYNAMIC_DRAW
-    );
+    glGenVertexArrays(1, &vao);
+
+    glGenTextures(1, &screenTexture);
+    glBindTexture(GL_TEXTURE_2D, screenTexture);
+
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, width, height);
 
     glGenBuffers(1, &sliceSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, sliceSSBO);
@@ -144,17 +138,6 @@ void Mesh::initGPU() {
         GL_DYNAMIC_DRAW
     );
 
-
-    // atomic counter
-    glGenBuffers(1, &counterSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
-    uint32_t zero = 0;
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        sizeof(uint32_t),
-        &zero,
-        GL_DYNAMIC_DRAW
-    );
 
     glGenBuffers(1, &voxelCountSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
@@ -167,104 +150,83 @@ void Mesh::initGPU() {
     );
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, voxelSSBO);
+
+    glBindImageTexture(
+        4,
+        screenTexture,
+        0,
+        GL_FALSE,
+        0,
+        GL_READ_WRITE,
+        GL_RGBA8
+    );
+
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 14, voxelCountSSBO);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vertexSSBO);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, counterSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 13, sliceSSBO);
-
-    // VAO
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexSSBO);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
-        sizeof(Vertex), (void*)(4 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE,
-        sizeof(Vertex), (void*)(8 * sizeof(float)));
-    glEnableVertexAttribArray(2);
 
     // shaders
     std::string path = "shaders/mesh.comp.shader";
     computeProgram = loadComputeProgram(path.c_str());
-
-    path = "shaders/axes.shader";
-    axesProgram = loadComputeProgram(path.c_str());
-
+    
     path = "shaders/measure.shader";
     sliceProgram = loadComputeProgram(path.c_str());
 
 }
 void Mesh::buildMesh() {
-    vertCount = 0;
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
-    uint32_t zero = 0;
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
+
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
     uint32_t zero2 = 0;
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero2);
 
     
-        glUseProgram(computeProgram);
-        glUniform3i(
-            glGetUniformLocation(computeProgram, "gridSize"),
-            grid.X, grid.Y, grid.Z
-        );
+    glUseProgram(computeProgram);
 
-        glDispatchCompute(
-            (grid.X + 7) / 8,
-            (grid.Y + 7) / 8,
-            (grid.Z + 7) / 8
-        );
-
-
-        glMemoryBarrier(
-            GL_SHADER_STORAGE_BARRIER_BIT |
-            GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
-        );
-
-
-    glUseProgram(axesProgram);
     glUniform3i(
-        glGetUniformLocation(axesProgram, "gridSize"),
-        grid.X / 10, grid.Y, grid.Z / 10
+        glGetUniformLocation(computeProgram, "gridSize"),
+        grid.X, grid.Y, grid.Z
     );
-    glUniform1i(
-        glGetUniformLocation(axesProgram, "size"),
-        20
+    glUniform3f(
+        glGetUniformLocation(computeProgram, "bounds"),
+        grid.X/300.0f, grid.Y/300.0f, grid.Z/300.0f
+    );
+    glUniform3f(
+        glGetUniformLocation(computeProgram, "center"),
+        0,0,0
     );
 
-    glDispatchCompute(1, 1, 1);
 
+    glUniform3f(
+        glGetUniformLocation(computeProgram, "rayOrigin"),
+        0, 0, -1.0f
+    );
+
+
+    glDispatchCompute(
+        (width+15)/16,
+        (height+15)/16,
+        1
+    );
     glMemoryBarrier(
-        GL_SHADER_STORAGE_BARRIER_BIT |
-        GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+        GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
+        GL_TEXTURE_FETCH_BARRIER_BIT
     );
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
-    glGetBufferSubData(
-        GL_SHADER_STORAGE_BUFFER,
-        0,
-        sizeof(uint32_t),
-        &vertCount
-    );
-    
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
-    glGetBufferSubData(
-        GL_SHADER_STORAGE_BUFFER,
-        0,
-        sizeof(uint32_t),
-        &voxelCount
-    );
+
 
 }
-
-void Mesh::draw() {
+void Mesh::draw()
+{
     glUseProgram(renderProgram);
+
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, screenTexture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
     glBindVertexArray(vao);
-    glDrawArrays(GL_TRIANGLES, 0, vertCount);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 }

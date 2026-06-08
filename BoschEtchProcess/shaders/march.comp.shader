@@ -281,7 +281,7 @@ void main()
                             * abs(invDir[i]);
                     }
                 }
-                p.energy *= 0.8;
+                p.energy *= 0.8; // To edit
                 t = 0.0;
                 continue;
             }

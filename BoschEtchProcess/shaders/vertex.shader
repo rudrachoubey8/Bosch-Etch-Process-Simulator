@@ -1,29 +1,18 @@
-#version 330 core
+#version 430
 
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec3 aNormal;
-layout(location = 2) in vec3 aColor;
+const vec2 verts[6] = vec2[](
+    vec2(-1,-1),
+    vec2( 1,-1),
+    vec2( 1, 1),
 
-out vec3 FragPos;
-out vec3 Normal;
-out vec3 vColor;
-
-uniform mat4 Projection;
-uniform mat4 Size;
-uniform mat4 Transform;
-uniform mat4 Rotate;
+    vec2(-1,-1),
+    vec2( 1, 1),
+    vec2(-1, 1)
+);
+out vec2 uv;
 
 void main()
 {
-    mat4 Model = Rotate * Size * Transform;
-
-    vec4 worldPos = Model * vec4(aPos, 1.0);
-    FragPos = worldPos.xyz;
-
-    mat3 NormalMatrix = transpose(inverse(mat3(Model)));
-    Normal = normalize(NormalMatrix * aNormal);
-
-    gl_Position = Projection * worldPos;
-
-    vColor = aColor;
+    gl_Position = vec4(verts[gl_VertexID],0,1);
+    uv = verts[gl_VertexID] * 0.5 + 0.5;
 }

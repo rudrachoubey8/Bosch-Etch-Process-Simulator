@@ -1,6 +1,7 @@
 
 #include "stackSimulations.h"
 
+
 Simulation stackSimulation() {
     Simulation simulation(
         Settings::X,
