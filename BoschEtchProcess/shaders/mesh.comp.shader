@@ -37,10 +37,10 @@ bool inBounds(int x, int y, int z)
            x < gridSize.x && y < gridSize.y && z < gridSize.z;
 }
 
-bool solidAt(int x, int y, int z)
+int solidAt(int x, int y, int z)
 {
-    if (!inBounds(x, y, z)) return false;
-    return voxels[idx(x, y, z)].solid != 0;
+    if (!inBounds(x, y, z)) return 0;
+    return voxels[idx(x, y, z)].solid;
 }
 
 int typeAt(int x, int y, int z)
@@ -64,26 +64,10 @@ vec3 colorFromType(int t)
 vec3 voxelNormal(ivec3 p)
 {
     float nx = 0.0, ny = 0.0, nz = 0.0;
-
-    for(int dz = -1; dz <= 1; dz++)
-    for(int dy = -1; dy <= 1; dy++)
-    for(int dx = -1; dx <= 1; dx++)
-    {
-        float w =
-            (abs(dx) == 0 ? 2.0 : 1.0) *
-            (abs(dy) == 0 ? 2.0 : 1.0) *
-            (abs(dz) == 0 ? 2.0 : 1.0);
-
-        float s = float(solidAt(
-            p.x + dx,
-            p.y + dy,
-            p.z + dz
-        ));
-
-        nx += dx * w * s;
-        ny += dy * w * s;
-        nz += dz * w * s;
-    }
+ 
+    nx = solidAt(p.x+1, p.y,p.z) - solidAt(p.x-1, p.y,p.z);
+    ny = solidAt(p.x, p.y+1,p.z) - solidAt(p.x,p.y-1,p.z);
+    nz = solidAt(p.x, p.y,p.z+1) - solidAt(p.x, p.y,p.z-1);
 
     vec3 n = vec3(nx, ny, nz);
 
@@ -166,7 +150,7 @@ void main()
 
         if (!inBounds(voxel.x, voxel.y, voxel.z))
             break;
-        if(solidAt(voxel.x, voxel.y, voxel.z))
+        if(solidAt(voxel.x, voxel.y, voxel.z) == 1)
         {
             vec3 N = voxelNormal(voxel);
             vec3 L = normalize(rayOrigin - p);
@@ -175,19 +159,6 @@ void main()
 
             float diffuse = max(dot(N, L), 0.0);
 
-            float specular = pow(max(dot(N, H), 0.0), 32.0) * 0.4;
-
-            float occlusion = 0.0;
-            for(int oz = -1; oz <= 1; oz++)
-            for(int oy = -1; oy <= 1; oy++)
-            for(int ox = -1; ox <= 1; ox++)
-                occlusion += float(solidAt(
-                    voxel.x + ox,
-                    voxel.y + oy,
-                    voxel.z + oz
-                ));
-
-            occlusion = 1.0 - (occlusion / 27.0) * 0.6;
 
             float ambient = 0.15;
 
@@ -196,12 +167,8 @@ void main()
             );
 
             vec3 color =
-                baseColor * (ambient + diffuse) * occlusion
-                + specular;
-
-            float fog = exp(-t * 0.08);
-            vec3 fogColor = vec3(0.05, 0.05, 0.08); 
-            color = mix(fogColor, color, fog);
+                baseColor * (ambient + diffuse);
+                
 
             outColor = vec4(color, 1.0);
             break;
