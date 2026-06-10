@@ -123,6 +123,7 @@ std::vector<int> Mesh::extractSlice(
 void Mesh::initGPU() {
 
     glGenVertexArrays(1, &vao);
+    glGenFramebuffers(1, &fbo);
 
     glGenTextures(1, &screenTexture);
     glBindTexture(GL_TEXTURE_2D, screenTexture);
@@ -172,14 +173,18 @@ void Mesh::initGPU() {
     sliceProgram = loadComputeProgram(path.c_str());
 
 }
-void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9]) {
+void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int sliceIndex) {
 
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
     uint32_t zero2 = 0;
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero2);
 
-    
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, screenTexture, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     glUseProgram(computeProgram);
 
     glUniform3i(
@@ -204,6 +209,12 @@ void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9]) {
     glUniformMatrix3fv(
         glGetUniformLocation(computeProgram, "viewMatrix"),
         1, GL_TRUE, viewMatrix
+    );
+
+
+    glUniform2i(
+        glGetUniformLocation(computeProgram, "slice"),
+        sliceDir, sliceIndex
     );
 
     // Project cuboid corners to screen space and find 2D AABB

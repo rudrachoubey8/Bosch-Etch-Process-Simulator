@@ -1,5 +1,4 @@
 #version 430
-
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 struct Voxel
@@ -11,20 +10,17 @@ struct Voxel
     int type;
 };
 
-layout(std430, binding = 6) readonly buffer Voxels
-{
-    Voxel voxels[];
-};
-
+layout(std430, binding = 6) readonly buffer Voxels { Voxel voxels[]; };
 layout(rgba8, binding = 4) uniform writeonly image2D outputImage;
 
 uniform ivec3 gridSize;
 uniform vec3 bounds;
 uniform vec3 center;
 uniform ivec2 tileOffset;
-
 uniform vec3 rayOrigin;
 uniform mat3 viewMatrix;
+
+uniform ivec2 slice;
 
 int idx(int x, int y, int z)
 {
@@ -58,41 +54,34 @@ vec3 colorFromType(int t)
     return vec3(1.0);
 }
 
-
-// Wider trilinear normal — samples a 3x3x3 neighbourhood
-// with Gaussian-weighted Sobel for much softer shading
-vec3 voxelNormal(ivec3 p)
+float sampleSDF(ivec3 p)
 {
-    float nx = 0.0, ny = 0.0, nz = 0.0;
- 
-    nx = solidAt(p.x+1, p.y,p.z) - solidAt(p.x-1, p.y,p.z);
-    ny = solidAt(p.x, p.y+1,p.z) - solidAt(p.x,p.y-1,p.z);
-    nz = solidAt(p.x, p.y,p.z+1) - solidAt(p.x, p.y,p.z-1);
+    if (!inBounds(p.x, p.y, p.z)) return 1.0;
+    if (solidAt(p.x, p.y, p.z) == 1) return -1.0;
 
-    vec3 n = vec3(nx, ny, nz);
-
-    if(length(n) < 0.0001)
+    float minDist = 1.0;
+    for (int dz = -1; dz <= 1; dz++)
+    for (int dy = -1; dy <= 1; dy++)
+    for (int dx = -1; dx <= 1; dx++)
     {
-        // boundary fallback from before
-        vec3 distToMin = vec3(p) / vec3(gridSize);
-        vec3 distToMax = 1.0 - distToMin;
-        vec3 dist = min(distToMin, distToMax);
-
-        int axis = 0;
-        if(dist.y < dist.x && dist.y < dist.z) axis = 1;
-        if(dist.z < dist.x && dist.z < dist.y) axis = 2;
-
-        vec3 fallback = vec3(0.0);
-        if(axis == 0) fallback.x = (distToMin.x < distToMax.x) ? -1.0 : 1.0;
-        if(axis == 1) fallback.y = (distToMin.y < distToMax.y) ? -1.0 : 1.0;
-        if(axis == 2) fallback.z = (distToMin.z < distToMax.z) ? -1.0 : 1.0;
-
-        return fallback;
+        if (dx == 0 && dy == 0 && dz == 0) continue;
+        if (solidAt(p.x+dx, p.y+dy, p.z+dz) == 1)
+        {
+            float d = length(vec3(dx, dy, dz));
+            minDist = min(minDist, d);
+        }
     }
-
-    return normalize(-n);
+    return minDist;
 }
 
+// Gradient normal from fake SDF
+vec3 computeNormal(ivec3 p)
+{
+    float nx = sampleSDF(ivec3(p.x+1, p.y, p.z)) - sampleSDF(ivec3(p.x-1, p.y, p.z));
+    float ny = sampleSDF(ivec3(p.x, p.y+1, p.z)) - sampleSDF(ivec3(p.x, p.y-1, p.z));
+    float nz = sampleSDF(ivec3(p.x, p.y, p.z+1)) - sampleSDF(ivec3(p.x, p.y, p.z-1));
+    return normalize(vec3(nx, ny, nz));
+}
 
 vec2 rayAABB(vec3 ro, vec3 rd, vec3 boxMin, vec3 boxMax)
 {
@@ -101,82 +90,126 @@ vec2 rayAABB(vec3 ro, vec3 rd, vec3 boxMin, vec3 boxMax)
     vec3 t1 = (boxMax - ro) * invDir;
     vec3 tMin = min(t0, t1);
     vec3 tMax = max(t0, t1);
-    float tEnter = max(max(tMin.x, tMin.y), tMin.z);
-    float tExit  = min(min(tMax.x, tMax.y), tMax.z);
-    return vec2(tEnter, tExit);
-}
 
+    return vec2(
+        max(max(tMin.x, tMin.y), tMin.z),
+        min(min(tMax.x, tMax.y), tMax.z)
+    );
+}
+bool ddaTrace(vec3 ro, vec3 rd, vec3 boxMin, float voxelSize, float tStart, float tMax, out ivec3 hitVoxel, out float hitT, out ivec3 hitFace)
+{
+    vec3 entry = ro + rd * tStart;
+    vec3 local = (entry - boxMin) / voxelSize;
+
+    ivec3 voxel = ivec3(clamp(floor(local), vec3(0), vec3(gridSize) - vec3(1)));
+
+    ivec3 step = ivec3(sign(rd));
+    vec3 deltaDist = abs(vec3(voxelSize) / rd);
+
+    vec3 voxelCorner = boxMin + vec3(voxel) * voxelSize;
+    vec3 tNext;
+
+    tNext.x = (step.x > 0 ? (voxelCorner.x + voxelSize - entry.x) : (entry.x - voxelCorner.x)) / abs(rd.x);
+    tNext.y = (step.y > 0 ? (voxelCorner.y + voxelSize - entry.y) : (entry.y - voxelCorner.y)) / abs(rd.y);
+    tNext.z = (step.z > 0 ? (voxelCorner.z + voxelSize - entry.z) : (entry.z - voxelCorner.z)) / abs(rd.z);
+
+    float t = tStart;
+
+    // FIX: Explicitly derive the starting boundary normal based on which AABB side we hit
+    ivec3 face = ivec3(0, 0, -step.z); 
+    vec3 distanceToEdge = abs(entry - boxMin) / (float(gridSize) * voxelSize);
+    
+    // If we are right on the edge of the global bounding box, force the correct boundary normal
+    if (abs(entry.x - boxMin.x) < 0.001) face = ivec3(-1, 0, 0);
+    else if (abs(entry.x - (boxMin.x + float(gridSize.x) * voxelSize)) < 0.001) face = ivec3(1, 0, 0);
+    else if (abs(entry.y - boxMin.y) < 0.001) face = ivec3(0, -1, 0);
+    else if (abs(entry.y - (boxMin.y + float(gridSize.y) * voxelSize)) < 0.001) face = ivec3(0, 1, 0);
+    else if (abs(entry.z - boxMin.z) < 0.001) face = ivec3(0, 0, -1);
+    else if (abs(entry.z - (boxMin.z + float(gridSize.z) * voxelSize)) < 0.001) face = ivec3(0, 0, 1);
+
+    ivec3 range = ivec3(0);
+    if(slice.x == 0)      range = ivec3(gridSize.x, gridSize.y, slice.y);
+    else if(slice.x == 1) range = ivec3(gridSize.x, slice.y, gridSize.z);
+    else if(slice.x == 2) range = ivec3(slice.y, gridSize.y, gridSize.z);
+
+    for (int i = 0; i < 1024; i++)
+    {
+        if (!inBounds(voxel.x, voxel.y, voxel.z)) break;
+        if (t > tMax) break;
+
+        if (solidAt(voxel.x, voxel.y, voxel.z) == 1 && any(greaterThan(voxel, range)) == false)
+        {
+            hitVoxel = voxel;
+            hitT = t;
+            hitFace = face;
+            return true;
+        }
+
+        if (tNext.x <= tNext.y && tNext.x <= tNext.z)
+        {
+            t = tNext.x;
+            face = ivec3(-step.x, 0, 0); // Correct inward-facing step direction
+            voxel.x += step.x;
+            tNext.x += deltaDist.x;
+        }
+        else if (tNext.y <= tNext.z)
+        {
+            t = tNext.y;
+            face = ivec3(0, -step.y, 0);
+            voxel.y += step.y;
+            tNext.y += deltaDist.y;
+        }
+        else
+        {
+            t = tNext.z;
+            face = ivec3(0, 0, -step.z);
+            voxel.z += step.z;
+            tNext.z += deltaDist.z;
+        }
+    }
+
+    hitVoxel = ivec3(0);
+    hitT = tMax;
+    hitFace = ivec3(0,0,1);
+    return false;
+}
 void main()
 {
     ivec2 pixel = tileOffset + ivec2(gl_GlobalInvocationID.xy);
     ivec2 screenSize = imageSize(outputImage);
-
-    if (pixel.x >= screenSize.x || pixel.y >= screenSize.y)
-        return;
+    if (pixel.x >= screenSize.x || pixel.y >= screenSize.y) return;
 
     vec2 uv = (vec2(pixel) / vec2(screenSize)) * 2.0 - 1.0;
     uv.x *= float(screenSize.x) / float(screenSize.y);
 
-    vec3 screenPos = vec3(uv.x, uv.y, 0.0);
-    vec3 rayDir = normalize(viewMatrix * vec3(uv.x, uv.y, 1.0));
-
-    float voxelSize = bounds.x / float(gridSize.x);
-    float stepSize  = voxelSize * 0.5;
-
-    vec4 outColor = vec4(0, 0, 0, 1);
+    vec3 rd = normalize(viewMatrix * vec3(uv.x, uv.y, 1.0));
+    vec3 ro = rayOrigin;
 
     vec3 boxMin = center - bounds * 0.5;
     vec3 boxMax = center + bounds * 0.5;
+    float voxelSize = bounds.x / float(gridSize.x);
 
-    vec2 tHit = rayAABB(rayOrigin, rayDir, boxMin, boxMax);
+    vec2 tHit = rayAABB(ro, rd, boxMin, boxMax);
 
-    if (tHit.x > tHit.y || tHit.y < 0.0)
-    {
-        imageStore(outputImage, pixel, outColor);
-        return;
-    }
+    if (tHit.x > tHit.y || tHit.y < 0.0) return;
 
-    float t = max(tHit.x, 0.0) + stepSize * 0.01;
-    float tMax = tHit.y;
+    float tStart = max(tHit.x, 0.0);
+  
+    ivec3 hitVoxel;
+    float hitT;
+    ivec3 hitFace;
 
-    for (int i = 0; i < 512; i++)
-    {
-        if (t > tMax) break;
+    bool hit = ddaTrace(ro, rd, boxMin, voxelSize, tStart, tHit.y, hitVoxel, hitT, hitFace);
 
-        vec3 p = rayOrigin + rayDir * t;
+    if (!hit) return;
 
-        vec3 local = (p - boxMin) / bounds;
-        ivec3 voxel = ivec3(local * vec3(gridSize));
+    vec3 hitPos    = ro + rd * hitT;
+    vec3 hitNormal = normalize(vec3(hitFace));  
+    vec3 baseColor = colorFromType(typeAt(hitVoxel.x, hitVoxel.y, hitVoxel.z));
 
-        if (!inBounds(voxel.x, voxel.y, voxel.z))
-            break;
-        if(solidAt(voxel.x, voxel.y, voxel.z) == 1)
-        {
-            vec3 N = voxelNormal(voxel);
-            vec3 L = normalize(rayOrigin - p);
-            vec3 V = -rayDir;
-            vec3 H = normalize(L + V);
+    vec3 L        = normalize(rayOrigin - hitPos);
+    float diffuse = max(dot(hitNormal, L), 0.0);
+    float ambient = 0.15;
 
-            float diffuse = max(dot(N, L), 0.0);
-
-
-            float ambient = 0.15;
-
-            vec3 baseColor = colorFromType(
-                typeAt(voxel.x, voxel.y, voxel.z)
-            );
-
-            vec3 color =
-                baseColor * (ambient + diffuse);
-                
-
-            outColor = vec4(color, 1.0);
-            break;
-        }
-        
-
-        t += stepSize;
-    }
-
-    imageStore(outputImage, pixel, outColor);
+    imageStore(outputImage, pixel, vec4(baseColor * (ambient + diffuse), 1.0));
 }

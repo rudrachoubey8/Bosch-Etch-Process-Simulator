@@ -13,13 +13,14 @@ public:
     ~Mesh();
 
     void initGPU();     // create buffers, shaders, VAO
-    void buildMesh(float rayOrigin[3], float viewMatrix[9]);   // dispatch compute
+    void buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int sliceIndex);   // dispatch compute
     void draw();        // render
     void setRenderingProgram(GLuint program);
     void setVoxelBuffer(GLuint ssbo);
     std::vector<int> extractSlice(int dir, int sliceIndex);
 
     int voxelCount = 0;
+    GLuint screenTexture = 0;
 
 private:
 
@@ -27,10 +28,10 @@ private:
     int height = 1080;
 
     Grid& grid;
+    GLuint fbo;
 
     GLuint voxelSSBO = 0;
     GLuint sliceSSBO = 0;
-    GLuint screenTexture;
 
     GLuint vao = 0;
     GLuint computeProgram = 0;

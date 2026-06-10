@@ -362,7 +362,7 @@ void renderMesh(Simulation& simulation) {
 
             mesh.initGPU();
             mesh.setVoxelBuffer(simulation.voxelSSBO);
-            mesh.buildMesh(rayOrigin, viewMatrix);
+            mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
         }
 
         ImGui::End();
@@ -553,7 +553,7 @@ void renderMesh(Simulation& simulation) {
 
                     mesh.initGPU();
                     mesh.setVoxelBuffer(simulation.voxelSSBO);
-                    mesh.buildMesh(rayOrigin, viewMatrix);
+                    mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
 
                     std::cout << "Loaded grid + settings from: "
                         << gridFilename << std::endl;
@@ -631,7 +631,7 @@ void renderMesh(Simulation& simulation) {
                             simulation.voxelSSBO
                         );
 
-                        mesh.buildMesh(rayOrigin, viewMatrix);
+                        mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
 
                         std::cout
                             << "Simulation loaded from "
@@ -722,7 +722,8 @@ void renderMesh(Simulation& simulation) {
         }
         if (draw) {
             if (draw && frame % 10 == 0) {
-                mesh.buildMesh(rayOrigin, viewMatrix);
+                // In your render loop, before buildMesh():
+                mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
             }
             mesh.draw();
         }
