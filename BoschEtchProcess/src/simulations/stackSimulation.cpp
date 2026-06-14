@@ -100,7 +100,7 @@ Simulation stackSimulation() {
                         x +
                             y * Settings::X +
                             z * Settings::X * Settings::Y
-                    ].solid = 0;
+                    ].sdf = 0;
                 }
             }
         }

@@ -8,6 +8,7 @@ struct Voxel {
     float voxelSize;
     int solid;
     int type;
+    float sdf;
 };
 
 struct Vertex {

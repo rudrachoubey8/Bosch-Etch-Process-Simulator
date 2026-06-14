@@ -30,7 +30,7 @@ add_executable(BoschEtchProcess
     "src/simulations/stackSimulation.cpp" 
     "include/stackSimulations.h"
 
-)
+ "include/ChemicalReactions.h" "src/ChemicalReactions.cpp")
 
 add_custom_command(TARGET BoschEtchProcess POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

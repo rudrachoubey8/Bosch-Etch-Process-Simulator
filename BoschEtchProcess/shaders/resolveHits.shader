@@ -7,6 +7,7 @@ struct Voxel {
     float voxelSize;
     int solid;
     int type;
+    float sdf;
 };
 
 struct HitEvent {
@@ -67,9 +68,9 @@ void main()
     }
     else
     {
-        v.threshold -= h.damage;
+        v.sdf -= h.damage;
 
-        if(v.threshold <= 0.0)
+        if(v.sdf <= 0.0)
         {
             v.solid = 0;
             v.type = 0;

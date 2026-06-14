@@ -295,39 +295,54 @@ void main()
             {
                 if(!depositParticle)
                 {
-                    hits[writeIdx].cx =
-                        cell.x;
-
-                    hits[writeIdx].cy =
-                        cell.y;
-
-                    hits[writeIdx].cz =
-                        cell.z;
-
-                    hits[writeIdx].damage =
-                        damage;
-
+                    hits[writeIdx].cx = cell.x;
+                    hits[writeIdx].cy = cell.y;
+                    hits[writeIdx].cz = cell.z;
+                    hits[writeIdx].damage = damage;
                     hits[writeIdx].flags = 0u;
+
+                    // spread damage in radius around hit voxel
+                    for(int dz = -damageRadius; dz <= damageRadius; dz++)
+                    for(int dy = -damageRadius; dy <= damageRadius; dy++)
+                    for(int dx = -damageRadius; dx <= damageRadius; dx++)
+                    {
+                        ivec3 neighbor = cell + ivec3(dx, dy, dz);
+
+                        if(any(lessThan(neighbor, ivec3(0))) ||
+                           any(greaterThanEqual(neighbor, gridSize))) continue;
+
+                        float dist = length(vec3(dx, dy, dz));
+                        if(dist > float(damageRadius)) continue;
+
+                        int nidx = voxelIndex(neighbor);
+                        Voxel nv = voxels[nidx];
+
+                        if(nv.solid == 0) continue;
+
+                        float falloff = 1.0 - (dist / float(damageRadius));
+                        float proximityDamage = falloff * damage / nv.threshold;
+
+                        uint nWriteIdx = atomicAdd(hitCount, 1u);
+                        if(nWriteIdx < MAX_HITS)
+                        {
+                            hits[nWriteIdx].cx = neighbor.x;
+                            hits[nWriteIdx].cy = neighbor.y;
+                            hits[nWriteIdx].cz = neighbor.z;
+                            hits[nWriteIdx].damage = proximityDamage;
+                            hits[nWriteIdx].flags = 0u;
+                        }
+                    }
                 }
                 else
                 {
-                    ivec3 neighbor =
-                        cell + normal;
-
-                    hits[writeIdx].cx =
-                        cell.x;
-
-                    hits[writeIdx].cy =
-                        cell.y;
-
-                    hits[writeIdx].cz =
-                        cell.z;
-
-                    hits[writeIdx].damage =
-                        damage;
-
+                    ivec3 neighbor = cell + normal;
+                    hits[writeIdx].cx = cell.x;
+                    hits[writeIdx].cy = cell.y;
+                    hits[writeIdx].cz = cell.z;
+                    hits[writeIdx].damage = damage;
                     hits[writeIdx].flags = 1u;
                 }
+
             }
 
             p.alive = 0;

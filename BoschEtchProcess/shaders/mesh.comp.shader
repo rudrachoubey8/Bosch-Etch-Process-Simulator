@@ -8,6 +8,7 @@ struct Voxel
     float voxelSize;
     int solid;
     int type;
+    float sdf;
 };
 
 layout(std430, binding = 6) readonly buffer Voxels { Voxel voxels[]; };
