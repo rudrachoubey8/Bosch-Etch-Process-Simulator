@@ -61,6 +61,8 @@ uniform ivec3 gridSize;
 uniform int particleCount;
 uniform int typesOfVoxels;
 uniform int typesOfParticles;
+uniform int damageRadius;
+
 
 uint hash(uint x)
 {

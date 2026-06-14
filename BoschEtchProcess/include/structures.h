@@ -3,13 +3,15 @@
 #include <cstdint>
 #include <imgui.h>
 #include <string>
+
+
 struct Voxel {
     float threshold;
     float depositThreshold;
     float voxelSize;
     int solid;
     int type;
-    float sdf;
+    float sdf = 1e9;
 };
 
 struct ParticleTypeData

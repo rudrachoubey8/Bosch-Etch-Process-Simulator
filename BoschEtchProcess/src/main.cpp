@@ -918,7 +918,10 @@ void renderMesh(Simulation& simulation) {
 
 int main() {
 
-    renderMesh(stackSimulation());
+    Simulation sim = stackSimulation();
+    sim.initSDF();
+
+    renderMesh(sim);
 
     return 0;
 }

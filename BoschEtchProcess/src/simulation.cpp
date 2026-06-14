@@ -69,7 +69,7 @@ Simulation::Simulation(int X_, int Y_, int Z_, float voxelSize_)
 }
 
 
-void Simulation::initRectangle(const Voxel& voxel, int x0, int y0, int z0, int x1, int y1, int z1) {
+void Simulation::initRectangle(Voxel& voxel, int x0, int y0, int z0, int x1, int y1, int z1) {
     for (int x = x0; x < x1; x++)
     {
         for (int y = y0; y < y1; y++)
@@ -113,6 +113,7 @@ void Simulation::dispatchRayMarch(GLuint program, int particleCount, std::vector
     glUniform1i(glGetUniformLocation(program, "particleCount"), particleCount);
     glUniform1i(glGetUniformLocation(program, "typesOfVoxels"), typesOfVoxels);
     glUniform1i(glGetUniformLocation(program, "typesOfParticles"), typesOfParticles);
+    glUniform1i(glGetUniformLocation(program, "damageRadius"), 5);
 
     // Reset hit counter
     {
@@ -354,4 +355,76 @@ void Simulation::dispatchHits(GLuint program) {
 
     glDispatchCompute(groups, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
+
+void Simulation::initSDF() {
+    int X = Settings::X;
+    int Y = Settings::Y;
+    int Z = Settings::Z;
+
+    auto idx = [&](int x, int y, int z) {
+        return x + y * X + z * X * Y;
+        };
+
+    auto inBounds = [&](int x, int y, int z) {
+        return x >= 0 && x < X &&
+            y >= 0 && y < Y &&
+            z >= 0 && z < Z;
+        };
+
+    // find surface voxels and seed their neighbors
+    for (int z = 0; z < Z; z++)
+        for (int y = 0; y < Y; y++)
+            for (int x = 0; x < X; x++)
+            {
+                if (grid.voxels[idx(x, y, z)].solid == 0)
+                    continue;
+
+                // check if this solid voxel is exposed to air
+                // (has at least one air neighbor or is at grid edge)
+                bool isSurface = false;
+
+                int nx[6] = { x + 1,x - 1,x,  x,  x,  x };
+                int ny[6] = { y,  y,  y + 1,y - 1,y,  y };
+                int nz[6] = { z,  z,  z,  z,  z + 1,z - 1 };
+
+                for (int f = 0; f < 6; f++)
+                {
+                    if (!inBounds(nx[f], ny[f], nz[f])) {
+                        isSurface = true;  // edge of grid = exposed
+                        break;
+                    }
+                    if (grid.voxels[idx(nx[f], ny[f], nz[f])].solid == 0) {
+                        isSurface = true;
+                        break;
+                    }
+                }
+
+                if (!isSurface) continue;
+
+                // seed SDF in +-5 radius around this surface voxel
+                for (int dz = -5; dz <= 5; dz++)
+                    for (int dy = -5; dy <= 5; dy++)
+                        for (int dx = -5; dx <= 5; dx++)
+                        {
+                            int nx = x + dx;
+                            int ny = y + dy;
+                            int nz = z + dz;
+
+                            if (!inBounds(nx, ny, nz)) continue;
+
+                            float dist = sqrtf(
+                                float(dx * dx + dy * dy + dz * dz)
+                            );
+
+                            if (dist > 5.0f) continue;
+
+                            int nidx = idx(nx, ny, nz);
+
+                            // keep minimum distance
+                            if (dist < grid.voxels[nidx].sdf) {
+                                grid.voxels[nidx].sdf = dist;
+                            }
+                        }
+            }
 }
