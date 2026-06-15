@@ -52,7 +52,12 @@ void main()
 
     Voxel v = voxels[vidx];
 
-    if(v.solid == 0) return;
+    if(abs(v.sdf) > 1000000)
+    {
+        v.sdf = -2;
+        voxels[vidx] = v;
+        return;
+    }
 
     if((h.flags & 1u) == 1u)
     {
@@ -68,12 +73,11 @@ void main()
     }
     else
     {
-        v.sdf -= h.damage;
+        v.sdf += h.damage;
 
         if(v.sdf <= 0.0)
         {
             v.solid = 0;
-            v.type = 0;
         }
     }
 

@@ -113,7 +113,7 @@ void Simulation::dispatchRayMarch(GLuint program, int particleCount, std::vector
     glUniform1i(glGetUniformLocation(program, "particleCount"), particleCount);
     glUniform1i(glGetUniformLocation(program, "typesOfVoxels"), typesOfVoxels);
     glUniform1i(glGetUniformLocation(program, "typesOfParticles"), typesOfParticles);
-    glUniform1i(glGetUniformLocation(program, "damageRadius"), 5);
+    glUniform1i(glGetUniformLocation(program, "damageRadius"), 2);
 
     // Reset hit counter
     {
@@ -345,7 +345,7 @@ void Simulation::dispatchHits(GLuint program) {
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, counterSSBO);
     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &hitCount);
-
+    
     if (hitCount == 0) return;
 
     glUseProgram(program);
@@ -356,75 +356,143 @@ void Simulation::dispatchHits(GLuint program) {
     glDispatchCompute(groups, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
-
-void Simulation::initSDF() {
+void Simulation::initSDF()
+{
     int X = Settings::X;
     int Y = Settings::Y;
     int Z = Settings::Z;
 
-    auto idx = [&](int x, int y, int z) {
-        return x + y * X + z * X * Y;
+    auto idx = [&](int x, int y, int z)
+        {
+            return x + y * X + z * X * Y;
         };
 
-    auto inBounds = [&](int x, int y, int z) {
-        return x >= 0 && x < X &&
-            y >= 0 && y < Y &&
-            z >= 0 && z < Z;
+    auto inBounds = [&](int x, int y, int z)
+        {
+            return x >= 0 && x < X &&
+                y >= 0 && y < Y &&
+                z >= 0 && z < Z;
         };
 
-    // find surface voxels and seed their neighbors
+    // Initialize all voxels to a large value
+    for (int i = 0; i < X * Y * Z; i++)
+        grid.voxels[i].sdf = 1e9f;
+
+    int fx[6] = { 1,-1, 0, 0, 0, 0 };
+    int fy[6] = { 0, 0, 1,-1, 0, 0 };
+    int fz[6] = { 0, 0, 0, 0, 1,-1 };
+
     for (int z = 0; z < Z; z++)
+    {
         for (int y = 0; y < Y; y++)
+        {
             for (int x = 0; x < X; x++)
             {
                 if (grid.voxels[idx(x, y, z)].solid == 0)
                     continue;
 
-                // check if this solid voxel is exposed to air
-                // (has at least one air neighbor or is at grid edge)
-                bool isSurface = false;
+                float normalX = 0.0f;
+                float normalY = 0.0f;
+                float normalZ = 0.0f;
 
-                int nx[6] = { x + 1,x - 1,x,  x,  x,  x };
-                int ny[6] = { y,  y,  y + 1,y - 1,y,  y };
-                int nz[6] = { z,  z,  z,  z,  z + 1,z - 1 };
+                bool isSurface = false;
 
                 for (int f = 0; f < 6; f++)
                 {
-                    if (!inBounds(nx[f], ny[f], nz[f])) {
-                        isSurface = true;  // edge of grid = exposed
-                        break;
-                    }
-                    if (grid.voxels[idx(nx[f], ny[f], nz[f])].solid == 0) {
+                    int nx = x + fx[f];
+                    int ny = y + fy[f];
+                    int nz = z + fz[f];
+
+                    if (!inBounds(nx, ny, nz))
+                    {
+                        normalX += fx[f];
+                        normalY += fy[f];
+                        normalZ += fz[f];
                         isSurface = true;
-                        break;
+                    }
+                    else if (grid.voxels[idx(nx, ny, nz)].solid == 0)
+                    {
+                        normalX += fx[f];
+                        normalY += fy[f];
+                        normalZ += fz[f];
+                        isSurface = true;
                     }
                 }
 
-                if (!isSurface) continue;
+                if (!isSurface)
+                    continue;
 
-                // seed SDF in +-5 radius around this surface voxel
+                // Normalize surface normal
+                float len =
+                    sqrtf(
+                        normalX * normalX +
+                        normalY * normalY +
+                        normalZ * normalZ
+                    );
+
+                if (len > 1e-6f)
+                {
+                    normalX /= len;
+                    normalY /= len;
+                    normalZ /= len;
+                }
+
+                // Build narrow-band SDF (radius = 5 voxels)
                 for (int dz = -5; dz <= 5; dz++)
+                {
                     for (int dy = -5; dy <= 5; dy++)
+                    {
                         for (int dx = -5; dx <= 5; dx++)
                         {
                             int nx = x + dx;
                             int ny = y + dy;
                             int nz = z + dz;
 
-                            if (!inBounds(nx, ny, nz)) continue;
+                            if (!inBounds(nx, ny, nz))
+                                continue;
 
-                            float dist = sqrtf(
-                                float(dx * dx + dy * dy + dz * dz)
-                            );
+                            float dist =
+                                sqrtf(
+                                    float(
+                                        dx * dx +
+                                        dy * dy +
+                                        dz * dz
+                                        )
+                                );
 
-                            if (dist > 5.0f) continue;
+                            if (dist > 5.0f)
+                                continue;
+
+                            float dot = 0.0f;
+
+                            if (dist > 1e-6f)
+                            {
+                                float vx = dx / dist;
+                                float vy = dy / dist;
+                                float vz = dz / dist;
+
+                                dot =
+                                    vx * normalX +
+                                    vy * normalY +
+                                    vz * normalZ;
+                            }
+
+                            float signedDist =
+                                (dot <= 0.0f)
+                                ? -dist
+                                : dist;
 
                             int nidx = idx(nx, ny, nz);
 
-                            // keep minimum distance
-                            if (dist < grid.voxels[nidx].sdf) {
-                                grid.voxels[nidx].sdf = dist;
+                            if (fabsf(signedDist) <
+                                fabsf(grid.voxels[nidx].sdf))
+                            {
+                                grid.voxels[nidx].sdf = signedDist;
                             }
                         }
+                    }
+                }
             }
+        }
+    }
 }

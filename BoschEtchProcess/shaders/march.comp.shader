@@ -19,6 +19,7 @@ struct Voxel {
     float voxelSize;
     int solid;
     int type;
+    float sdf;
 };
 
 struct HitEvent {
@@ -165,7 +166,7 @@ void main()
 
         Voxel v = voxels[vidx];
 
-        if(v.solid != 0)
+        if(v.sdf <= 0)
         {
             ivec3 normal;
 
@@ -300,7 +301,7 @@ void main()
                     hits[writeIdx].cx = cell.x;
                     hits[writeIdx].cy = cell.y;
                     hits[writeIdx].cz = cell.z;
-                    hits[writeIdx].damage = damage;
+                    hits[writeIdx].damage = damage/voxels[voxelIndex(cell)].threshold;
                     hits[writeIdx].flags = 0u;
 
                     // spread damage in radius around hit voxel
