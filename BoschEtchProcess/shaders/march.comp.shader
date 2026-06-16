@@ -108,10 +108,8 @@ void main()
         ivec3(floor(origin / voxelSize));
 
     ivec3 stepDir;
-
     vec3 tMax;
     vec3 tDelta;
-
     vec3 invDir = 1.0 / dir;
 
     for(int i = 0; i < 3; i++)
@@ -163,7 +161,6 @@ void main()
         
 
         int vidx = voxelIndex(cell);
-
         Voxel v = voxels[vidx];
 
         if(v.sdf <= 0)
@@ -322,7 +319,7 @@ void main()
 
                         if(nv.solid == 0) continue;
 
-                        float falloff = 1.0 - (dist / float(damageRadius));
+                        float falloff = 1.0 - pow((dist / float(damageRadius)), 3);
                         float proximityDamage = falloff * damage / nv.threshold;
 
                         uint nWriteIdx = atomicAdd(hitCount, 1u);

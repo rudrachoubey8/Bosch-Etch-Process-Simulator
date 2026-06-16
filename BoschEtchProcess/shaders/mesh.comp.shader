@@ -48,7 +48,15 @@ int typeAt(int x, int y, int z)
 // safe SDF read — air voxels and out of bounds return large value
 float sdfAtSafe(int x, int y, int z)
 {
-    if (!inBounds(x, y, z)) return 1000000;
+    if (!inBounds(x, y, z)) return 0;
+
+    if(voxels[idx(x,y,z)].sdf > 1000000 && voxels[idx(x,y,z)].solid == 0) {
+        return -1;
+        }
+
+    if(voxels[idx(x,y,z)].solid == 1){
+        return 0;
+        }
 
     return voxels[idx(x, y, z)].sdf;
 }
