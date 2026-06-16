@@ -318,9 +318,11 @@ void main()
                         Voxel nv = voxels[nidx];
 
                         if(nv.solid == 0) continue;
+                        
+                        float t = dist / damageRadius;
+                        float falloff = 1.0 - (3.0 * t * t - 2.0 * t * t * t); // smoothstep
+                        float proximityDamage = falloff * damage * (1.0 / (1.0 + nv.threshold)); 
 
-                        float falloff = 1.0 - pow((dist / float(damageRadius)), 3);
-                        float proximityDamage = falloff * damage / nv.threshold;
 
                         uint nWriteIdx = atomicAdd(hitCount, 1u);
                         if(nWriteIdx < MAX_HITS)

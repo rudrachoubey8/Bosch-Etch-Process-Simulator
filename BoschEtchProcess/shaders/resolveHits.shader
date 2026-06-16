@@ -76,9 +76,9 @@ void main()
 
         v.sdf += h.damage;
 
-        if(v.sdf <= 0.0)
+        if(v.sdf > 0.0)
         {
-            v.solid = 1;
+            v.solid = 0;
         }
 
     }

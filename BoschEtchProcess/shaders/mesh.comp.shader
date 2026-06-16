@@ -33,32 +33,18 @@ bool inBounds(int x, int y, int z)
            x < gridSize.x && y < gridSize.y && z < gridSize.z;
 }
 
-int solidAt(int x, int y, int z)
-{
-    if (!inBounds(x, y, z)) return 0;
-    return voxels[idx(x, y, z)].solid;
-}
-
 int typeAt(int x, int y, int z)
 {
-    if (!inBounds(x, y, z)) return 0;
+    if (!inBounds(x, y, z)) return -1;
     return voxels[idx(x, y, z)].type;
 }
 
-// safe SDF read — air voxels and out of bounds return large value
 float sdfAtSafe(int x, int y, int z)
 {
-    if (!inBounds(x, y, z)) return 0;
-
-    if(voxels[idx(x,y,z)].sdf > 1000000 && voxels[idx(x,y,z)].solid == 0) {
-        return -1;
-        }
-
-    if(voxels[idx(x,y,z)].solid == 1){
-        return 0;
-        }
-
-    return voxels[idx(x, y, z)].sdf;
+    if (!inBounds(x, y, z)) return 1.0;
+    float s = voxels[idx(x, y, z)].sdf;
+    if (s > 1e6) return 1.0;
+    return s;
 }
 
 vec3 colorFromType(int t)
@@ -70,7 +56,6 @@ vec3 colorFromType(int t)
     return vec3(1.0);
 }
 
-// trilinear SDF sample — only bleeds across same-solid voxels
 float sampleSDFTrilinear(vec3 worldPos, vec3 boxMin, float voxelSize)
 {
     vec3 local = (worldPos - boxMin) / voxelSize - 0.5;
@@ -95,22 +80,17 @@ float sampleSDFTrilinear(vec3 worldPos, vec3 boxMin, float voxelSize)
     return mix(y0, y1, f.z);
 }
 
-vec3 computeNormal(ivec3 voxel, float voxelSize, ivec3 faceNormal)
+vec3 computeNormal(vec3 worldPos, vec3 boxMin, float voxelSize)
 {
-    float dx = sdfAtSafe(voxel.x + 1, voxel.y, voxel.z)
-             - sdfAtSafe(voxel.x - 1, voxel.y, voxel.z);
-
-    float dy = sdfAtSafe(voxel.x, voxel.y + 1, voxel.z)
-             - sdfAtSafe(voxel.x, voxel.y - 1, voxel.z);
-
-    float dz = sdfAtSafe(voxel.x, voxel.y, voxel.z + 1)
-             - sdfAtSafe(voxel.x, voxel.y, voxel.z - 1);
-
+    float eps = voxelSize * 0.1;
+    float dx = sampleSDFTrilinear(worldPos + vec3( eps,0,0), boxMin, voxelSize)
+             - sampleSDFTrilinear(worldPos + vec3(-eps,0,0), boxMin, voxelSize);
+    float dy = sampleSDFTrilinear(worldPos + vec3(0, eps,0), boxMin, voxelSize)
+             - sampleSDFTrilinear(worldPos + vec3(0,-eps,0), boxMin, voxelSize);
+    float dz = sampleSDFTrilinear(worldPos + vec3(0,0, eps), boxMin, voxelSize)
+             - sampleSDFTrilinear(worldPos + vec3(0,0,-eps), boxMin, voxelSize);
     vec3 n = vec3(dx, dy, dz);
-
-    if (length(n) < 0.001)
-        return normalize(vec3(faceNormal));
-
+    if (length(n) < 0.001) return vec3(0, 1, 0);
     return normalize(n);
 }
 
@@ -127,11 +107,11 @@ vec2 rayAABB(vec3 ro, vec3 rd, vec3 boxMin, vec3 boxMax)
     );
 }
 
-bool ddaTrace(vec3 ro, vec3 rd, vec3 boxMin, float voxelSize, float tStart, float tMax,
-              out ivec3 hitVoxel, out float hitT, out ivec3 hitFace)
+bool trace(vec3 ro, vec3 rd, vec3 boxMin, float voxelSize, float tStart, float tMax,
+           out ivec3 hitVoxel, out float hitT)
 {
-    vec3 entry  = ro + rd * tStart;
-    vec3 local  = (entry - boxMin) / voxelSize;
+    vec3 entry = ro + rd * tStart;
+    vec3 local = (entry - boxMin) / voxelSize;
     ivec3 voxel = ivec3(clamp(floor(local), vec3(0), vec3(gridSize) - vec3(1)));
 
     ivec3 step     = ivec3(sign(rd));
@@ -139,21 +119,13 @@ bool ddaTrace(vec3 ro, vec3 rd, vec3 boxMin, float voxelSize, float tStart, floa
 
     vec3 voxelCorner = boxMin + vec3(voxel) * voxelSize;
     vec3 tNext;
-    tNext.x = (step.x > 0 ? (voxelCorner.x + voxelSize - entry.x) : (entry.x - voxelCorner.x)) / abs(rd.x);
-    tNext.y = (step.y > 0 ? (voxelCorner.y + voxelSize - entry.y) : (entry.y - voxelCorner.y)) / abs(rd.y);
-    tNext.z = (step.z > 0 ? (voxelCorner.z + voxelSize - entry.z) : (entry.z - voxelCorner.z)) / abs(rd.z);
+    tNext.x = tStart + ((step.x > 0) ? (voxelCorner.x + voxelSize - entry.x) : (entry.x - voxelCorner.x)) / abs(rd.x);
+    tNext.y = tStart + ((step.y > 0) ? (voxelCorner.y + voxelSize - entry.y) : (entry.y - voxelCorner.y)) / abs(rd.y);
+    tNext.z = tStart + ((step.z > 0) ? (voxelCorner.z + voxelSize - entry.z) : (entry.z - voxelCorner.z)) / abs(rd.z);
 
-    float t    = tStart;
-    ivec3 face = ivec3(0, 0, -step.z);
+    float t = tStart;
 
-    if      (abs(entry.x - boxMin.x)                                   < 0.001) face = ivec3(-1,  0,  0);
-    else if (abs(entry.x - (boxMin.x + float(gridSize.x) * voxelSize)) < 0.001) face = ivec3( 1,  0,  0);
-    else if (abs(entry.y - boxMin.y)                                   < 0.001) face = ivec3( 0, -1,  0);
-    else if (abs(entry.y - (boxMin.y + float(gridSize.y) * voxelSize)) < 0.001) face = ivec3( 0,  1,  0);
-    else if (abs(entry.z - boxMin.z)                                   < 0.001) face = ivec3( 0,  0, -1);
-    else if (abs(entry.z - (boxMin.z + float(gridSize.z) * voxelSize)) < 0.001) face = ivec3( 0,  0,  1);
-
-    ivec3 range = ivec3(0);
+    ivec3 range = ivec3(gridSize); // default: no slice
     if      (slice.x == 0) range = ivec3(gridSize.x, gridSize.y, slice.y);
     else if (slice.x == 1) range = ivec3(gridSize.x, slice.y,    gridSize.z);
     else if (slice.x == 2) range = ivec3(slice.y,    gridSize.y, gridSize.z);
@@ -162,47 +134,27 @@ bool ddaTrace(vec3 ro, vec3 rd, vec3 boxMin, float voxelSize, float tStart, floa
     {
         if (!inBounds(voxel.x, voxel.y, voxel.z)) break;
         if (t > tMax) break;
+        vec3 pos = ro + rd * t;
+        local = (pos - boxMin) / voxelSize;
+        voxel = ivec3(clamp(floor(local), vec3(0), vec3(gridSize) - vec3(1)));
 
-        // hit when SDF <= 0 (on or inside surface)
-        float sdfVal = inBounds(voxel.x, voxel.y, voxel.z)
-                     ? voxels[idx(voxel.x, voxel.y, voxel.z)].sdf
-                     : 1e9;
+        if (!any(greaterThan(voxel, range)))
+        {
+            float rawSDF = sampleSDFTrilinear(ro + rd * t, boxMin, voxelSize);
 
-        if (sdfVal <= 0 &&
-            !any(greaterThan(voxel, range)))
-        {
-            hitVoxel = voxel;
-            hitT     = t;
-            hitFace  = face;
-            return true;
+            // not uninitialized and SDF says surface here
+            if (rawSDF <= 1e6 && rawSDF <= 0.0)
+            {
+                hitVoxel = voxel;
+                hitT     = t;
+                return true;
+            }
         }
-
-        if (tNext.x <= tNext.y && tNext.x <= tNext.z)
-        {
-            t       = tNext.x;
-            face    = ivec3(-step.x, 0, 0);
-            voxel.x += step.x;
-            tNext.x += deltaDist.x;
-        }
-        else if (tNext.y <= tNext.z)
-        {
-            t       = tNext.y;
-            face    = ivec3(0, -step.y, 0);
-            voxel.y += step.y;
-            tNext.y += deltaDist.y;
-        }
-        else
-        {
-            t       = tNext.z;
-            face    = ivec3(0, 0, -step.z);
-            voxel.z += step.z;
-            tNext.z += deltaDist.z;
-        }
+        t += 0.3 * voxelSize;
     }
 
     hitVoxel = ivec3(0);
     hitT     = tMax;
-    hitFace  = ivec3(0, 0, 1);
     return false;
 }
 
@@ -229,24 +181,19 @@ void main()
 
     ivec3 hitVoxel;
     float hitT;
-    ivec3 hitFace;
 
-    bool hit = ddaTrace(ro, rd, boxMin, voxelSize, tStart, tHit.y,
-                        hitVoxel, hitT, hitFace);
+    bool hit = trace(ro, rd, boxMin, voxelSize, tStart, tHit.y, hitVoxel, hitT);
     if (!hit) return;
 
     vec3 hitPos    = ro + rd * hitT;
     vec3 baseColor = colorFromType(typeAt(hitVoxel.x, hitVoxel.y, hitVoxel.z));
 
-    // smooth normal from trilinear SDF gradient, fallback to face normal
-    vec3 hitNormal = computeNormal(hitVoxel, voxelSize, hitFace);
-
-    // ensure normal faces camera
+    vec3 hitNormal = computeNormal(hitPos, boxMin, voxelSize);
     if (dot(hitNormal, -rd) < 0.0) hitNormal = -hitNormal;
 
     vec3  L       = normalize(rayOrigin - hitPos);
     float diffuse = max(dot(hitNormal, L), 0.0);
-    float ambient = 0.15;
+    float ambient = 0.2;
 
     imageStore(outputImage, pixel, vec4(baseColor * (ambient + diffuse), 1.0));
 }

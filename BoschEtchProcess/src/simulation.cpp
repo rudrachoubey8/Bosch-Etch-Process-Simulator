@@ -75,7 +75,14 @@ void Simulation::initRectangle(Voxel& voxel, int x0, int y0, int z0, int x1, int
         for (int y = y0; y < y1; y++)
         {
             for (int z = z0;z < z1;z++) {
+
+                std::vector<int> distances = {abs(x-x0), abs(x - x1 + 1), abs(y - y0), abs(y - y1 + 1), abs(z - z0), abs(z - z1 + 1) };
+                auto minimum = std::min_element(distances.begin(), distances.end());
+
+                voxel.sdf = -(*minimum);
+
                 grid.at(x, y, z) = voxel;
+
             }
         }
     }

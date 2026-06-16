@@ -191,9 +191,11 @@ void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int 
         glGetUniformLocation(computeProgram, "gridSize"),
         grid.X, grid.Y, grid.Z
     );
+
+
     glUniform3f(
         glGetUniformLocation(computeProgram, "bounds"),
-        grid.X/300.0f, grid.Y/300.0f, grid.Z/300.0f
+        grid.X/200.0f, grid.Y/200.0f, grid.Z/200.0f
     );
 
     glUniform3f(
