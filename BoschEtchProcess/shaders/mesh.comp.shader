@@ -114,15 +114,6 @@ bool trace(vec3 ro, vec3 rd, vec3 boxMin, float voxelSize, float tStart, float t
     vec3 local = (entry - boxMin) / voxelSize;
     ivec3 voxel = ivec3(clamp(floor(local), vec3(0), vec3(gridSize) - vec3(1)));
 
-    ivec3 step     = ivec3(sign(rd));
-    vec3 deltaDist = abs(vec3(voxelSize) / rd);
-
-    vec3 voxelCorner = boxMin + vec3(voxel) * voxelSize;
-    vec3 tNext;
-    tNext.x = tStart + ((step.x > 0) ? (voxelCorner.x + voxelSize - entry.x) : (entry.x - voxelCorner.x)) / abs(rd.x);
-    tNext.y = tStart + ((step.y > 0) ? (voxelCorner.y + voxelSize - entry.y) : (entry.y - voxelCorner.y)) / abs(rd.y);
-    tNext.z = tStart + ((step.z > 0) ? (voxelCorner.z + voxelSize - entry.z) : (entry.z - voxelCorner.z)) / abs(rd.z);
-
     float t = tStart;
 
     ivec3 range = ivec3(gridSize); // default: no slice
@@ -130,7 +121,7 @@ bool trace(vec3 ro, vec3 rd, vec3 boxMin, float voxelSize, float tStart, float t
     else if (slice.x == 1) range = ivec3(gridSize.x, slice.y,    gridSize.z);
     else if (slice.x == 2) range = ivec3(slice.y,    gridSize.y, gridSize.z);
 
-    for (int i = 0; i < 1024; i++)
+    for (int i = 0; i < 512; i++)
     {
         if (!inBounds(voxel.x, voxel.y, voxel.z)) break;
         if (t > tMax) break;

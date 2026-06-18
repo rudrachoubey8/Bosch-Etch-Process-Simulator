@@ -163,7 +163,7 @@ void main()
         int vidx = voxelIndex(cell);
         Voxel v = voxels[vidx];
 
-        if(v.sdf <= 0)
+        if(v.solid != 0)
         {
             ivec3 normal;
 
@@ -320,7 +320,7 @@ void main()
                         if(nv.solid == 0) continue;
                         
                         float t = dist / damageRadius;
-                        float falloff = 1.0 - (3.0 * t * t - 2.0 * t * t * t); // smoothstep
+                        float falloff = 1.0 - pow(t, 2); // smoothstep
                         float proximityDamage = falloff * damage * (1.0 / (1.0 + nv.threshold)); 
 
 

@@ -120,7 +120,7 @@ void Simulation::dispatchRayMarch(GLuint program, int particleCount, std::vector
     glUniform1i(glGetUniformLocation(program, "particleCount"), particleCount);
     glUniform1i(glGetUniformLocation(program, "typesOfVoxels"), typesOfVoxels);
     glUniform1i(glGetUniformLocation(program, "typesOfParticles"), typesOfParticles);
-    glUniform1i(glGetUniformLocation(program, "damageRadius"), 2);
+    glUniform1i(glGetUniformLocation(program, "damageRadius"), 1);
 
     // Reset hit counter
     {

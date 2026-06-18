@@ -192,10 +192,14 @@ void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int 
         grid.X, grid.Y, grid.Z
     );
 
+    float mag = sqrt(pow(grid.X, 2) + pow(grid.Y, 2) + pow(grid.Z, 2));
+    float boundsX = grid.X / mag;
+    float boundsY = grid.Y / mag;
+    float boundsZ = grid.Z / mag;
 
     glUniform3f(
         glGetUniformLocation(computeProgram, "bounds"),
-        grid.X/200.0f, grid.Y/200.0f, grid.Z/200.0f
+        boundsX, boundsY, boundsZ
     );
 
     glUniform3f(
