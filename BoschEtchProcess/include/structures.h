@@ -11,6 +11,13 @@ struct Voxel {
     int type;
 };
 
+struct EnergyDistribution
+{
+    std::vector<float> energyCenters;
+    std::vector<float> pdf;
+};
+
+
 struct ParticleTypeData
 {
     int count = 1000;
@@ -22,6 +29,14 @@ struct ParticleTypeData
     bool draw = true;
 
     int interval = 10;
+
+    EnergyDistribution iedf;
+};
+
+struct TransportResult
+{
+    std::vector<double> energies;
+    double flux;
 };
 struct SaveData
 {
