@@ -286,28 +286,123 @@ void Simulation::bindBuffers(){
 
 }
 
-void Simulation::uploadParticles(ParticleTypeData p, int particleType) {
+void Simulation::uploadParticles(
+    ParticleTypeData p,
+    int particleType)
+{
+    constexpr float PI = 3.14159265358979323846f;
 
-    constexpr float pi = 3.1415926f;
-    float random = Math::randomFloat(100);
-    float cosTheta = cos(p.halfAngle * 3.141592653589/180);
+    float random = Math::randomFloat(100.0f);
+
+    float cosTheta =
+        cosf(p.halfAngle * PI / 180.0f);
+
+    // Build CDF
+    std::vector<EnergyBin> bins;
+
+    float cumulative = 0.0f;
+
+    for (int i = 0; i < p.iedf.pdf.size(); i++)
+    {
+        cumulative += p.iedf.pdf[i];
+
+        bins.push_back(
+            {
+                p.iedf.energyCenters[i],
+                cumulative
+            });
+    }
+
+    if (!bins.empty())
+        bins.back().cdf = 1.0f;
+
+    // Upload IEDF
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER,
+        iedfSSBO);
+
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        bins.size() * sizeof(EnergyBin),
+        bins.data(),
+        GL_DYNAMIC_DRAW);
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER,
+        10,
+        iedfSSBO);
+
+    // Init shader uniforms
     glUseProgram(initParticlesProgram);
 
-    glUniform1ui(glGetUniformLocation(initParticlesProgram, "startIndex"), getParticleCount());
-    glUniform1ui(glGetUniformLocation(initParticlesProgram, "particleCount"), p.count);
-    glUniform1i(glGetUniformLocation(initParticlesProgram, "type"), particleType);
-    glUniform1i(glGetUniformLocation(initParticlesProgram, "deposit"), p.deposit);
-    glUniform1f(glGetUniformLocation(initParticlesProgram, "energy"), p.energy);
-    glUniform1f(glGetUniformLocation(initParticlesProgram, "stddev"), p.stddev);
-    
-    glUniform1f(glGetUniformLocation(initParticlesProgram, "cosTheta"), cosTheta);
-    glUniform1f(glGetUniformLocation(initParticlesProgram, "X"), Settings::X);
-    glUniform1f(glGetUniformLocation(initParticlesProgram, "Z"), Settings::Z);
-    glUniform1f(glGetUniformLocation(initParticlesProgram, "seed"), random);
+    glUniform1ui(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "startIndex"),
+        getParticleCount());
 
-    glDispatchCompute((p.count + 255) / 256, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glUniform1ui(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "particleCount"),
+        p.count);
 
+    glUniform1i(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "deposit"),
+        p.deposit);
+
+    glUniform1i(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "type"),
+        particleType);
+
+    glUniform1f(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "cosTheta"),
+        cosTheta);
+
+    glUniform1f(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "X"),
+        Settings::X);
+
+    glUniform1f(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "Z"),
+        Settings::Z);
+
+    glUniform1f(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "seed"),
+        random);
+
+    glUniform1i(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "nBins"),
+        bins.size());
+
+    glUniform1f(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "mass"),
+        SpeciesNames[particleType].mass);
+
+    // Launch
+    glDispatchCompute(
+        (p.count + 255) / 256,
+        1,
+        1);
+
+    glMemoryBarrier(
+        GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 void Simulation::uploadVoxels(std::vector<Voxel>& voxels) {

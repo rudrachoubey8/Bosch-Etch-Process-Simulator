@@ -14,6 +14,7 @@
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <chrono>
+#include "ChemicalReactions.h"
 
 
 #include "stackSimulations.h"
@@ -251,9 +252,187 @@ void renderMesh(Simulation& simulation) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 430");
 
-    
+    static BulkModel bulk;
+    static Sheath sheath;
+
+    bulk.dt = 1e-9;
+    bulk.duration = 1e-3;
+
+    bulk.Te0 = 3.0;
+
+    bulk.Area = 0.01;                        // substrate area
+    bulk.Volume = PI * 0.1 * 0.1 * 0.03;       // cylinder radius=10 cm, height=3 cm
+
+    bulk.Pabs = 700.0 * 0.3;                   // 210 W absorbed
+    bulk.reactions =
+    {
+        // Ar + e- -> Ar* + e-
+        {
+            "r11_Ar",
+            11.6,
+            6.033e-15, 0.3287, 12.08,
+            {{"Ar",1},{"e-",1}},
+            {{"Ar*",1},{"e-",1}}
+        },
+
+        // Ar + e- -> Ar+ + 2e-
+        {
+            "r12_Ar",
+            15.76,
+            2.160e-14, 0.6329, 16.0627,
+            {{"Ar",1},{"e-",1}},
+            {{"Ar+",1},{"e-",2}}
+        },
+
+        // Ar* + e- -> Ar+ + 2e-
+        {
+            "r13_Ar",
+            4.43,
+            1.698e-13, 0.1072, 4.4129,
+            {{"Ar*",1},{"e-",1}},
+            {{"Ar+",1},{"e-",2}}
+        },
+
+        // Ar* + e- -> Ar + e-
+        {
+            "r14_Ar",
+            -11.6,
+            3.969e-15, 0.2894, 0.7412,
+            {{"Ar*",1},{"e-",1}},
+            {{"Ar",1},{"e-",1}}
+        },
+
+        // Ar* + Ar* -> Ar+ + Ar + e-
+        {
+            "r15_Ar",
+            0.0,
+            1.20e-15, 0.0, 0.0,
+            {{"Ar*",2}},
+            {{"Ar+",1},{"Ar",1},{"e-",1}}
+        },
+
+        // CF4 excitation
+        {
+            "r2_CF4",
+            0.15,
+            3.26e-14, -0.317, 0.230,
+            {{"CF4",1},{"e-",1}},
+            {{"CF4*",1},{"e-",1}}
+        },
+
+        // C4F8 ionization
+        {
+            "r2_C4F8",
+            17.0,
+            5.70e-14, 0.470, 17.480,
+            {{"C4F8",1},{"e-",1}},
+            {{"C2F4+",1},{"C2F4",1},{"e-",2}}
+        },
+
+        // C4F8 dissociation
+        {
+            "r3_C4F8",
+            2.42,
+            9.58e-14, 0.042, 8.572,
+            {{"C4F8",1},{"e-",1}},
+            {{"C2F4",2},{"e-",1}}
+        },
+
+        // C2F4 dissociation
+        {
+            "r4_C2F4",
+            3.06,
+            1.32e-15, 0.412, 6.329,
+            {{"C2F4",1},{"e-",1}},
+            {{"CF2",2},{"e-",1}}
+        },
+
+        // CF3 ionization
+        {
+            "r5_CF3",
+            10.0,
+            1.36e-15, 0.796, 9.057,
+            {{"CF3",1},{"e-",1}},
+            {{"CF3+",1},{"e-",2}}
+        },
+
+        // CF3 attachment
+        {
+            "r6_CF3",
+            9.0,
+            1.0e-16, 0.0, 0.0,
+            {{"CF3",1},{"e-",1}},
+            {{"CF2",1},{"F-",1}}
+        },
+
+        // CF2 ionization
+        {
+            "r7_CF2",
+            10.0,
+            1.10e-14, 0.393, 11.370,
+            {{"CF2",1},{"e-",1}},
+            {{"CF2+",1},{"e-",2}}
+        },
+
+        // F- detachment
+        {
+            "r8_Fm",
+            13.0,
+            6.27e-14, 0.193, 12.918,
+            {{"F-",1},{"e-",1}},
+            {{"F",1},{"e-",2}}
+        },
+
+        // CF2 + F -> CF3
+        {
+            "r9_CF2F",
+            0.0,
+            1.40e-20, 0.0, 0.0,
+            {{"CF2",1},{"F",1}},
+            {{"CF3",1}}
+        },
+
+        // CF3 + F -> CF4
+        {
+            "r10_CF3F",
+            0.0,
+            2.32e-18, 0.0, 0.0,
+            {{"CF3",1},{"F",1}},
+            {{"CF4",1}}
+        }
+    };
+
+    advanceModel(bulk);
+
+    initializeSheath(bulk, sheath);
+
+    vector<ParticleTypeData> particleDataTypes = generateParticles(bulk, sheath);
 
     while (!glfwWindowShouldClose(window)) {
+
+        static bool initialized = false;
+
+        if (!initialized)
+        {
+            //---------------------------------------
+            // Initialize bulk model once
+            //---------------------------------------
+
+            bulk.dt = 1e-7;
+            bulk.Pabs = 500.0;
+            bulk.Area = 1e-4;
+            bulk.Volume = 1e-3;
+            bulk.pump = 10.0;
+            bulk.Te0 = 3.0;
+
+            // Example densities
+            bulk.densities["e"] = 1e16;
+            bulk.densities["Ar+"] = 1e16;
+            bulk.densities["Ar"] = 1e20;
+
+            initialized = true;
+        }
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -691,17 +870,15 @@ void renderMesh(Simulation& simulation) {
             if (!pause)
             {
                 auto t1 = Clock::now();
-
                 if (frame <= duration)
                 {
-                    for (int i = 0; i < particleTypes.size(); i++)
+                    for (int i = 0;i < particleDataTypes.size();i++)
                     {
-                        ParticleTypeData& p = particleTypes[i];
-
-                        if (frame % p.interval == 0)
-                        {
-                            simulation.uploadParticles(p, i);
-                        }
+                        ParticleTypeData p = particleDataTypes[i];
+                        // Upload particles
+                        simulation.uploadParticles(
+                            p,
+                            i);
                     }
                 }
 

@@ -49,7 +49,7 @@ void advanceModel(BulkModel& bulk) {
 		// subtract reactants
 		bool electronRxn = 0;
 		for (auto& p : rxn.reactants) {
-			if (p.first == "e") {
+			if (p.first == "e-") {
 				electronRxn = 1;
 			}
 			densitiesRate[p.first] -= R * p.second;
@@ -72,7 +72,7 @@ void advanceModel(BulkModel& bulk) {
 		densitiesRate[p.first] += bulk.inPump[p.first];
 		if (p.second.charge > 0)
 		{
-			double uB = sqrt(E_CHARGE * bulk.Te0 / p.second.mass);
+			double uB = sqrt(E_CHARGE * bulk.Te0 / (p.second.mass * AMU));
 			densitiesRate[p.first] -= bulk.densities[p.first] * uB * bulk.Area / bulk.Volume;
 			gammaI += bulk.densities[p.first] * uB;
 		}
@@ -98,7 +98,7 @@ void initializeSheath(BulkModel& bulk, Sheath& sheath)
 {
     // Electron density
     double ne = std::max(
-        bulk.densities["e"],
+        bulk.densities["e-"],
         1e12
     );
 
@@ -169,111 +169,111 @@ void initializeSheath(BulkModel& bulk, Sheath& sheath)
 
 
 
-TransportResult transportSpecies(
+std::vector<ParticleTypeData>
+generateParticles(
     BulkModel& bulk,
-    Sheath& sheath,
-    double mass,
-    double Ngas,
-    int nParticles)
+    Sheath& sheath)
 {
-    TransportResult result;
+    std::vector<ParticleTypeData> particles;
 
-    double uB =
-        sqrt(E_CHARGE * bulk.Te0 / mass);
-
-    double dt = 1e-9;
-
-    std::mt19937 rng(1234);
-    
-    std::uniform_real_distribution<double> phaseDist(
-        0.0,
-        1.0);
-
-    std::normal_distribution<double> bohmDist(
-        uB,
-        0.2 * uB);
-
-    for (int i = 0;i < nParticles;i++)
+    for (auto& sp : Species)
     {
-        double x = sheath.thickness;
+        const std::string& name = sp.first;
+        const SpeciesProperties& prop = sp.second;
 
-        double v =
-            std::max(
-                bohmDist(rng),
-                0.0);
+        // only positive ions
+        if (prop.charge <= 0)
+            continue;
 
-        int cxCount = 0;
+        // species absent
+        if (bulk.densities[name] <= 0.0)
+            continue;
 
-        while (x > 0.0)
-        {
-            //-----------------------------------
-            // electric acceleration
-            //-----------------------------------
+        ParticleTypeData p;
 
-            double E =
-                electricField(
-                    sheath.voltage,
-                    x,
-                    sheath.thickness);
+        // Monte-Carlo transport
+        TransportResult tr =
+            transportSingleSpecies(
+                bulk,
+                sheath,
+                prop.mass * AMU,
+                bulk.Ngas,
+                bulk.densities[name] / 1e20);
 
-            double a =
-                E_CHARGE * E / mass;
+        // Build IEDF
+        buildIEDF(
+            tr,
+            p.iedf);
 
-            //-----------------------------------
-            // momentum transfer
-            //-----------------------------------
+        // Number of particles to launch
+        p.count =
+            bulk.densities[name] / 1e17;
 
-            double Eion =
-                0.5 * mass * v * v / E_CHARGE;
+        // Beam spread
+        p.halfAngle = 20.0f;
 
-            double sigma =
-                sigmaMT(Eion);
+        // Launch interval
+        p.interval = 10;
 
-            double nu =
-                Ngas * sigma * std::abs(v);
-
-            v += (a - nu * v) * dt;
-
-            if (v < 0)
-                v = 0;
-
-            x -= v * dt;
-
-            //-----------------------------------
-            // charge exchange
-            //-----------------------------------
-
-            if (cxCount == 0)
-            {
-                double sigCX =
-                    sigmaCX(Eion);
-
-                double lambda =
-                    1.0 / (Ngas * sigCX);
-
-                double P =
-                    1.0 - exp(
-                        -std::abs(v) * dt / lambda);
-
-                if (phaseDist(rng) < P)
-                {
-                    double vth =
-                        sqrt(
-                            8 * K_B * 373 /
-                            (PI * mass));
-
-                    v = 0.5 * v + 0.5 * vth;
-
-                    cxCount++;
-                }
-            }
-        }
-
-        double Ef =
-            0.5 * mass * v * v / E_CHARGE;
-
-        result.energies.push_back(Ef);
+        particles.push_back(
+            std::move(p));
     }
 
-    return result;
+    return particles;
+}
+
+void buildIEDF(
+    const TransportResult& result,
+    EnergyDistribution& dist, 
+    int bins = 200)
+{
+    dist.energyCenters.clear();
+    dist.pdf.clear();
+
+    if (result.energies.empty())
+        return;
+
+    // Find maximum energy
+    double Emax =
+        *std::max_element(
+            result.energies.begin(),
+            result.energies.end());
+
+    Emax = std::max(Emax, 1.0);
+
+    // Allocate
+    dist.energyCenters.resize(bins);
+    dist.pdf.assign(bins, 0.0f);
+
+    double dE = Emax / bins;
+
+    // Histogram
+    for (double E : result.energies)
+    {
+        int idx = static_cast<int>(E / dE);
+
+        idx = std::clamp(idx, 0, bins - 1);
+
+        dist.pdf[idx] += 1.0f;
+    }
+
+    // Normalize PDF
+    float sum = 0.0f;
+
+    for (float p : dist.pdf)
+        sum += p;
+
+    if (sum > 0.0f)
+    {
+        for (float& p : dist.pdf)
+            p /= sum;
+    }
+
+    // Bin centers
+    for (int i = 0; i < bins; i++)
+    {
+        dist.energyCenters[i] =
+            static_cast<float>((i + 0.5) * dE);
+    }
+
 }

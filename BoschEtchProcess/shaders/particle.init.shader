@@ -1,37 +1,68 @@
 #version 430
+
 layout(local_size_x = 256) in;
 
-struct Particle {
+struct Particle
+{
     int alive;
-    float x,y,z;
-    float dx, dy, dz;
+
+    float x;
+    float y;
+    float z;
+
+    float dx;
+    float dy;
+    float dz;
+
     int deposit;
+
     float speed;
     float energy;
+
     int type;
 };
 
-layout(std430, binding = 5) buffer ParticleBuffer {
+struct EnergyBin
+{
+    float energy;
+    float cdf;
+};
+
+layout(std430, binding = 5)
+buffer ParticleBuffer
+{
     Particle particles[];
 };
 
-layout(std430, binding = 9) buffer FinalParticlesCount {
+layout(std430, binding = 9)
+buffer FinalParticlesCount
+{
     uint finalParticlesCount;
 };
 
+layout(std430, binding = 10)
+readonly buffer IEDFBuffer
+{
+    EnergyBin bins[];
+};
 
 uniform uint startIndex;
 uniform uint particleCount;
+
 uniform int deposit;
 uniform int type;
-
 
 uniform float cosTheta;
 uniform float X;
 uniform float Z;
 uniform float seed;
-uniform float energy;
-uniform float stddev;
+
+uniform int nBins;
+uniform float mass;
+
+const float PI = 3.14159265359;
+const float E_CHARGE = 1.602176634e-19;
+const float AMU = 1.66053906660e-27;
 
 uint hash(uint x)
 {
@@ -40,6 +71,7 @@ uint hash(uint x)
     x ^= x >> 15;
     x *= 0x846ca68bu;
     x ^= x >> 16;
+
     return x;
 }
 
@@ -48,49 +80,100 @@ float rand01(uint x)
     return float(hash(x)) / 4294967296.0;
 }
 
-float normalRandom(uint seed, float mean, float stddev)
+float sampleIEDF(float r)
 {
-    float u1 = rand01(seed);
-    float u2 = rand01(seed + 123);
+    int lo = 0;
+    int hi = nBins - 1;
 
-    u1 = max(u1, 1e-6);
+    while (lo < hi)
+    {
+        int mid = (lo + hi) / 2;
 
-    float z0 = sqrt(-2.0 * log(u1)) * cos(2.0 * 3.14159265 * u2);
+        if (r <= bins[mid].cdf)
+            hi = mid;
+        else
+            lo = mid + 1;
+    }
 
-    return mean + z0 * stddev;
+    return bins[lo].energy;
 }
 
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
 
-    if(id >= particleCount)
+    if (id >= particleCount)
         return;
 
     uint index = startIndex + id;
 
-    float u = rand01(id + uint(seed));
-    float v = rand01(id * 2 + uint(seed));
+    //---------------------------------
+    // Direction
+    //---------------------------------
 
-    float y = cosTheta + u * (1.0 - cosTheta);
-    float phi = 6.28318530718 * v;
-    float r = sqrt(1.0 - y * y);
+    float u =
+        rand01(id + uint(seed));
+
+    float v =
+        rand01(id * 2u + uint(seed));
+
+    float y =
+        cosTheta +
+        u * (1.0 - cosTheta);
+
+    float phi =
+        2.0 * PI * v;
+
+    float r =
+        sqrt(1.0 - y * y);
+
+    float energy =
+        sampleIEDF(
+            rand01(
+                id * 17u +
+                uint(seed)));
+
+    float M =
+        mass * AMU;
+
+    float speed =
+        sqrt(
+            2.0 *
+            energy *
+            E_CHARGE /
+            M);
+
+    particles[index].alive = 1;
 
     particles[index].deposit = deposit;
+
     particles[index].type = type;
-    particles[index].speed = 10.0;
-    particles[index].alive = 1;
-    particles[index].energy = normalRandom(id + uint(seed), energy, stddev);
 
-    particles[index].dx = r * cos(phi);
-    particles[index].dy = -y;
-    particles[index].dz = r * sin(phi);
+    particles[index].energy = energy;
 
-    particles[index].x = rand01(id * 3 + uint(seed)) * X;
+    particles[index].speed = speed;
+
+    particles[index].dx =
+        r * cos(phi);
+
+    particles[index].dy =
+        -y;
+
+    particles[index].dz =
+        r * sin(phi);
+
+    particles[index].x =
+        rand01(id * 3u + uint(seed)) * X;
+
     particles[index].y = 290.0;
-    particles[index].z = rand01(id * 4 + uint(seed)) * Z;
-    if(id == 0)
+
+    particles[index].z =
+        rand01(id * 4u + uint(seed)) * Z;
+
+    if (id == 0)
     {
-        atomicAdd(finalParticlesCount, particleCount);
+        atomicAdd(
+            finalParticlesCount,
+            particleCount);
     }
 }

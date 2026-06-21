@@ -38,6 +38,7 @@ struct TransportResult
     std::vector<double> energies;
     double flux;
 };
+
 struct SaveData
 {
     int duration;
@@ -70,6 +71,12 @@ struct HitEvent {
     int cx, cy, cz;
     float damage;
     uint32_t flags; // 1 = deposit, 2 = absorbed
+};
+
+struct EnergyBin
+{
+    float energy;
+    float cdf;
 };
 
 struct Vertex {
