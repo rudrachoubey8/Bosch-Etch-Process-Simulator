@@ -1,9 +1,10 @@
+#pragma once
 #include <vector>
 #include <unordered_map>
 #include <string>
 #include <cmath>
 #include <random>
-
+#include "structures.h"
 const double PI = 3.14159265358979323846;
 const double E = 2.71828182845904523536;
 const double E_CHARGE = 1.602176634e-19;
@@ -20,7 +21,7 @@ struct SpeciesProperties {
 	double mass = 1;
 };
 
-std::unordered_map<std::string, SpeciesProperties> Species =
+inline std::unordered_map<std::string, SpeciesProperties> Species =
 {
 	{"Ar",      { 0, 39.948 }},
 	{"Ar*",     { 0, 39.948 }},
@@ -80,7 +81,7 @@ struct BulkModel
 	double Area = 1;
 	double Volume = 1;
 
-
+	double Ngas = 2.6e20;
 	double Pabs;
 	double pump;
 };
@@ -92,6 +93,8 @@ struct Sheath {
 
 
 void advanceModel(BulkModel& bulk);
+
+void advanceModelForDuration(BulkModel& bulk);
 
 void initializeSheath(BulkModel& bulk, Sheath& sheath);
 

@@ -15,6 +15,7 @@ add_executable(BoschEtchProcess
     src/glad.c
     src/shader.cpp
     src/Measurments.cpp
+    src/ChemicalReactions.cpp
 
     imgui/backend/imgui_impl_opengl3.cpp
     imgui/backend/imgui_impl_glfw.cpp

@@ -40,7 +40,7 @@ buffer FinalParticlesCount
     uint finalParticlesCount;
 };
 
-layout(std430, binding = 10)
+layout(std430, binding = 11)
 readonly buffer IEDFBuffer
 {
     EnergyBin bins[];

@@ -1,5 +1,6 @@
 #include "ChemicalReactions.h"
-#include "structures.h"
+#include <algorithm>
+#include <iostream>
 double sigmaCX(double E)
 {
     E = std::max(E, 0.1);
@@ -7,6 +8,7 @@ double sigmaCX(double E)
 }
 
 double sigmaMT(double E)
+
 {
     E = std::max(E, 0.1);
     return 1.4e-19 * (1.0 + 0.10 * exp(-(E - 30.0) * (E - 30.0) / 2000.0));
@@ -15,6 +17,8 @@ double sigmaMT(double E)
 double electricField(double V, double x, double d)
 {
     // E = -(3/2)*(V/d)*sqrt(x/d)
+    if (d <= 1e-12)
+        return 0.0;
 
     double xi = std::clamp(x / d, 0.0, 1.0);
     
@@ -44,6 +48,8 @@ void advanceModel(BulkModel& bulk) {
 			R *= pow(bulk.densities[p.first], p.second);
 		}
 
+		if (!std::isfinite(R))
+			continue;
 
 		// dn_i/dt = (stoichometric difference) * R
 		// subtract reactants
@@ -55,7 +61,7 @@ void advanceModel(BulkModel& bulk) {
 			densitiesRate[p.first] -= R * p.second;
 		}
 		if(electronRxn)
-			Pinel += R * rxn.energy;
+			Pinel += R * rxn.energy * E_CHARGE;
 		// add products
 		for (auto& p : rxn.products) {
 			densitiesRate[p.first] += R * p.second;
@@ -81,17 +87,66 @@ void advanceModel(BulkModel& bulk) {
 		}
 	}
 
-	Psheath = gammaI * (bulk.Area / bulk.Volume) * (bulk.Te0 * log(sqrt(bulk.mi/(2 * PI * E_MASS))) + 2.5 * bulk.Te0) ;
-	double Ptotal = bulk.Pabs - (Psheath + Pinel);
-	dTe_dt = Ptotal/(1.5 * bulk.densities["e"]) - bulk.Te0 / (bulk.densities["e"]) * densitiesRate["e"];
-	bulk.Te0 += dTe_dt * bulk.dt;
+	double effectiveIonMass = 0.0;
+	double ionDensity = 0.0;
+	for (const auto& p : Species)
+	{
+		if (p.second.charge > 0)
+		{
+			const double density = bulk.densities[p.first];
+			effectiveIonMass += density * p.second.mass * AMU;
+			ionDensity += density;
+		}
+	}
+	effectiveIonMass =
+		std::max(
+			effectiveIonMass / std::max(ionDensity, 1e-30),
+			AMU);
 
+	const double sheathEnergy =
+		bulk.Te0 * log(sqrt(effectiveIonMass / (2 * PI * E_MASS))) +
+		2.5 * bulk.Te0;
+	Psheath =
+		gammaI *
+		(bulk.Area / bulk.Volume) *
+		sheathEnergy *
+		E_CHARGE;
+
+	const double absorbedPowerDensity = bulk.Pabs / bulk.Volume;
+	const double Ptotal = absorbedPowerDensity - (Psheath + Pinel);
+	const double electronDensity = std::max(bulk.densities["e-"], 1e12);
+	dTe_dt =
+		Ptotal / (1.5 * electronDensity * E_CHARGE) -
+		bulk.Te0 / electronDensity * densitiesRate["e-"];
+    
+	bulk.Te0 += dTe_dt * bulk.dt;
+	if (!std::isfinite(bulk.Te0) || bulk.Te0 < 0.01)
+		bulk.Te0 = 0.01;
 	for (auto& p : bulk.densities)
 	{
 		p.second += densitiesRate[p.first] * bulk.dt;
 
-		if (p.second < 0.0)
+		if (!std::isfinite(p.second) || p.second < 0.0)
 			p.second = 0.0;
+	}
+}
+
+void advanceModelForDuration(BulkModel& bulk)
+{
+	if (bulk.dt <= 0.0 || bulk.duration <= 0.0)
+		return;
+
+	constexpr std::uint64_t maxStartupSteps = 10000;
+	const auto requestedSteps = static_cast<std::uint64_t>(
+		std::ceil(bulk.duration / bulk.dt));
+	const auto steps = std::min(requestedSteps, maxStartupSteps);
+
+	for (std::uint64_t step = 0; step < steps; ++step)
+	{
+		advanceModel(bulk);
+
+		if (!std::isfinite(bulk.Te0))
+			break;
 	}
 }
 void initializeSheath(BulkModel& bulk, Sheath& sheath)
@@ -124,6 +179,7 @@ void initializeSheath(BulkModel& bulk, Sheath& sheath)
     double M_eff =
         sumNiMi /
         std::max(sumNi, 1e-30);
+    M_eff = std::max(M_eff, AMU);
 
     // Bohm speed
     double uB =
@@ -165,8 +221,122 @@ void initializeSheath(BulkModel& bulk, Sheath& sheath)
             /
             std::max(Ji, 1e-30)
         );
+    if (!std::isfinite(sheath.voltage))
+        sheath.voltage = 0.0f;
+    if (!std::isfinite(sheath.thickness) || sheath.thickness <= 0.0f)
+        sheath.thickness = 1e-6f;
 }
 
+
+TransportResult transportSpecies(
+    BulkModel& bulk,
+    Sheath& sheath,
+    double mass,
+    double Ngas,
+    int nParticles)
+{
+    TransportResult result;
+    if (mass <= 0.0 || Ngas <= 0.0 || nParticles <= 0)
+        return result;
+
+    double uB =
+        sqrt(E_CHARGE * bulk.Te0 / mass);
+
+    double dt = 1e-9;
+
+    std::mt19937 rng(1234);
+
+    std::uniform_real_distribution<double> phaseDist(
+        0.0,
+        1.0);
+
+    std::normal_distribution<double> bohmDist(
+        uB,
+        0.2 * uB);
+
+    for (int i = 0;i < nParticles;i++)
+    {
+        double x = sheath.thickness;
+
+        double v =
+            std::max(
+                bohmDist(rng),
+                0.0);
+
+        int cxCount = 0;
+
+        constexpr int maxTransportSteps = 100000;
+        int transportStep = 0;
+
+        while (x > 0.0 && transportStep++ < maxTransportSteps)
+        {
+            // electric acceleration
+            double E =
+                electricField(
+                    sheath.voltage,
+                    x,
+                    sheath.thickness);
+
+            double a =
+                -E_CHARGE * E / mass;
+
+            // momentum transfer
+            double Eion =
+                0.5 * mass * v * v / E_CHARGE;
+
+            double sigma =
+                sigmaMT(Eion);
+
+            double nu =
+                Ngas * sigma * std::abs(v);
+
+            v += (a - nu * v) * dt;
+
+            if (v < 0)
+                v = 0;
+
+            x -= v * dt;
+
+            if (!std::isfinite(x) || !std::isfinite(v))
+            {
+                v = 0.0;
+                break;
+            }
+
+            // charge exchange
+            if (cxCount == 0)
+            {
+                double sigCX =
+                    sigmaCX(Eion);
+
+                double lambda =
+                    1.0 / (Ngas * sigCX);
+
+                double P =
+                    1.0 - exp(
+                        -std::abs(v) * dt / lambda);
+
+                if (phaseDist(rng) < P)
+                {
+                    double vth =
+                        sqrt(
+                            8 * K_B * 373 /
+                            (PI * mass));
+
+                    v = 0.5 * v + 0.5 * vth;
+
+                    cxCount++;
+                }
+            }
+        }
+
+        double Ef =
+            0.5 * mass * v * v / E_CHARGE;
+
+        result.energies.push_back(Ef);
+    }
+    return result;
+}
 
 
 std::vector<ParticleTypeData>
@@ -192,22 +362,35 @@ generateParticles(
         ParticleTypeData p;
 
         // Monte-Carlo transport
+        constexpr double densityPerMacroParticle = 1e18;
+        constexpr int maxMacroParticlesPerSpecies = 100000;
+        
+        const double scaledParticleCount = std::clamp(
+            bulk.densities[name] / densityPerMacroParticle,
+            1.0,
+            static_cast<double>(maxMacroParticlesPerSpecies));
+
+        const int particleCount =
+            static_cast<int>(scaledParticleCount);
+
         TransportResult tr =
-            transportSingleSpecies(
+            transportSpecies(
                 bulk,
                 sheath,
                 prop.mass * AMU,
                 bulk.Ngas,
-                bulk.densities[name] / 1e20);
-
+                particleCount);
+        
+        
         // Build IEDF
         buildIEDF(
             tr,
-            p.iedf);
+            p.iedf, 200);
 
+        p.name = name;
+        
         // Number of particles to launch
-        p.count =
-            bulk.densities[name] / 1e17;
+        p.count = particleCount;
 
         // Beam spread
         p.halfAngle = 20.0f;
@@ -238,7 +421,7 @@ void buildIEDF(
         *std::max_element(
             result.energies.begin(),
             result.energies.end());
-
+    
     Emax = std::max(Emax, 1.0);
 
     // Allocate
@@ -255,8 +438,8 @@ void buildIEDF(
         idx = std::clamp(idx, 0, bins - 1);
 
         dist.pdf[idx] += 1.0f;
-    }
 
+    }
     // Normalize PDF
     float sum = 0.0f;
 

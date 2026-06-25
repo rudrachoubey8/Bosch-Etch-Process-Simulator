@@ -1,8 +1,8 @@
 #pragma once
 #include <iostream>
+#include "ChemicalReactions.h"
 #include "structures.h"
 #include "glad/glad.h"
-
 class Simulation {
 
 public:
@@ -20,13 +20,13 @@ public:
 	void initParticle(const Particle& particle);
 	void setVoxel(int x, int y, int z, Voxel v);
 
-	void tick(std::vector<float> gridData, int typesOfVoxels, int typesOfParticles);
+	void tick(const std::vector<float>& gridData, int typesOfVoxels, int typesOfParticles);
 
 	void createBuffers();
 	void bindBuffers();
 	void uploadParticles(ParticleTypeData p, int type);
 	void uploadVoxels(std::vector<Voxel>& voxels);
-	void dispatchRayMarch(GLuint program, int particleCount, std::vector<float> gridData, int typesOfVoxels, int typesOfParticles);
+	void dispatchRayMarch(GLuint program, int particleCount, const std::vector<float>& gridData, int typesOfVoxels, int typesOfParticles);
 	void dispatchHits(GLuint program);
 
 	std::vector<HitEvent> downloadHits();
@@ -41,6 +41,7 @@ private:
 	uint32_t MAX_STEPS = 5000;
 	float MIN_ENERGY = 1e-6f;
 	GLuint particleSSBO = 0, hitSSBO = 0, reactionProbabilitiesSSBO = 0, counterSSBO = 0, axesSSBO = 0, rayMarchProgram = 0, finalParticlesCount = 0, finalParticles = 0;
+	size_t reactionProbabilitiesCapacity = 0;
 	GLuint iedfSSBO = 0;
 	GLuint resolveHitsProgram = 0;
 	GLuint initParticlesProgram = 0;

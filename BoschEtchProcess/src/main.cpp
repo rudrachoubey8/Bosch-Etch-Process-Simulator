@@ -1,9 +1,13 @@
-
+#define NOMINMAX
 #include <windows.h>
 #include <iostream>
 #include <random>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
+#include <algorithm>
+#include <cfloat>
+
 
 #include "shader.h"
 #include "simulation.h"
@@ -14,8 +18,6 @@
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <chrono>
-#include "ChemicalReactions.h"
-
 
 #include "stackSimulations.h"
 #include "imgui.h"
@@ -26,6 +28,214 @@
 
 
 using namespace std;
+
+namespace
+{
+    constexpr uint32_t PARTICLE_DATA_MAGIC = 0x42504550;
+    constexpr uint32_t PARTICLE_DATA_VERSION = 1;
+    constexpr uint32_t MAX_SERIALIZED_ITEMS = 1000000;
+
+    template <typename T>
+    bool writeValue(std::ostream& out, const T& value)
+    {
+        out.write(reinterpret_cast<const char*>(&value), sizeof(T));
+        return static_cast<bool>(out);
+    }
+
+    template <typename T>
+    bool readValue(std::istream& in, T& value)
+    {
+        in.read(reinterpret_cast<char*>(&value), sizeof(T));
+        return static_cast<bool>(in);
+    }
+
+    bool writeString(std::ostream& out, const std::string& value)
+    {
+        const uint32_t size = static_cast<uint32_t>(value.size());
+        return writeValue(out, size) &&
+            static_cast<bool>(out.write(value.data(), size));
+    }
+
+    bool readString(std::istream& in, std::string& value)
+    {
+        uint32_t size = 0;
+        if (!readValue(in, size) || size > MAX_SERIALIZED_ITEMS)
+            return false;
+
+        value.resize(size);
+        return static_cast<bool>(in.read(value.data(), size));
+    }
+
+    bool writeFloatVector(std::ostream& out, const std::vector<float>& values)
+    {
+        const uint32_t size = static_cast<uint32_t>(values.size());
+        return writeValue(out, size) &&
+            static_cast<bool>(out.write(
+                reinterpret_cast<const char*>(values.data()),
+                static_cast<std::streamsize>(size) * sizeof(float)));
+    }
+
+    bool readFloatVector(std::istream& in, std::vector<float>& values)
+    {
+        uint32_t size = 0;
+        if (!readValue(in, size) || size > MAX_SERIALIZED_ITEMS)
+            return false;
+
+        values.resize(size);
+        return static_cast<bool>(in.read(
+            reinterpret_cast<char*>(values.data()),
+            static_cast<std::streamsize>(size) * sizeof(float)));
+    }
+
+    bool writeParticleType(std::ostream& out, const ParticleTypeData& particle)
+    {
+        const uint8_t deposit = particle.deposit ? 1 : 0;
+        const uint8_t draw = particle.draw ? 1 : 0;
+
+        return
+            writeValue(out, particle.count) &&
+            writeValue(out, particle.energy) &&
+            writeValue(out, particle.stddev) &&
+            writeValue(out, particle.halfAngle) &&
+            writeValue(out, deposit) &&
+            writeValue(out, draw) &&
+            writeValue(out, particle.interval) &&
+            writeString(out, particle.name) &&
+            writeFloatVector(out, particle.iedf.energyCenters) &&
+            writeFloatVector(out, particle.iedf.pdf);
+    }
+
+    bool readParticleType(std::istream& in, ParticleTypeData& particle)
+    {
+        uint8_t deposit = 0;
+        uint8_t draw = 0;
+
+        if (!readValue(in, particle.count) ||
+            !readValue(in, particle.energy) ||
+            !readValue(in, particle.stddev) ||
+            !readValue(in, particle.halfAngle) ||
+            !readValue(in, deposit) ||
+            !readValue(in, draw) ||
+            !readValue(in, particle.interval) ||
+            !readString(in, particle.name) ||
+            !readFloatVector(in, particle.iedf.energyCenters) ||
+            !readFloatVector(in, particle.iedf.pdf))
+            return false;
+
+        particle.deposit = deposit != 0;
+        particle.draw = draw != 0;
+        return particle.iedf.energyCenters.size() == particle.iedf.pdf.size();
+    }
+
+    int probabilityIndex(
+        int particle,
+        int voxelType,
+        int probabilityType,
+        int particleCount,
+        int voxelTypeCount)
+    {
+        return
+            particle +
+            voxelType * particleCount +
+            particleCount * voxelTypeCount * probabilityType;
+    }
+
+    void setDefaultProbabilities(
+        std::vector<float>& probabilities,
+        int particleCount,
+        int voxelTypeCount)
+    {
+        probabilities.assign(particleCount * voxelTypeCount * 3, 0.0f);
+
+        for (int voxel = 0; voxel < voxelTypeCount; ++voxel)
+        {
+            for (int particle = 0; particle < particleCount; ++particle)
+            {
+                probabilities[
+                    probabilityIndex(
+                        particle,
+                        voxel,
+                        0,
+                        particleCount,
+                        voxelTypeCount)] = 1.0f;
+            }
+        }
+    }
+
+    void rebuildProbabilityGrid(
+        const std::vector<ParticleTypeData>& oldParticles,
+        const std::vector<float>& oldGrid,
+        const std::vector<ParticleTypeData>& newParticles,
+        int voxelTypeCount,
+        std::vector<float>& newGrid)
+    {
+        std::vector<float> rebuilt;
+        const int oldParticleCount = static_cast<int>(oldParticles.size());
+        const int newParticleCount = std::max(
+            1,
+            static_cast<int>(newParticles.size()));
+
+        setDefaultProbabilities(
+            rebuilt,
+            newParticleCount,
+            voxelTypeCount);
+
+        for (int newParticle = 0; newParticle < static_cast<int>(newParticles.size()); ++newParticle)
+        {
+            for (int oldParticle = 0; oldParticle < oldParticleCount; ++oldParticle)
+            {
+                if (newParticles[newParticle].name != oldParticles[oldParticle].name)
+                    continue;
+
+                for (int kind = 0; kind < 3; ++kind)
+                {
+                    for (int voxel = 0; voxel < voxelTypeCount; ++voxel)
+                    {
+                        const int oldIndex = probabilityIndex(
+                            oldParticle,
+                            voxel,
+                            kind,
+                            oldParticleCount,
+                            voxelTypeCount);
+
+                        if (oldIndex >= 0 && oldIndex < static_cast<int>(oldGrid.size()))
+                        {
+                            rebuilt[
+                                probabilityIndex(
+                                    newParticle,
+                                    voxel,
+                                    kind,
+                                    newParticleCount,
+                                    voxelTypeCount)] = oldGrid[oldIndex];
+                        }
+                    }
+                }
+            }
+        }
+
+        newGrid.swap(rebuilt);
+    }
+
+    ParticleTypeData makeSprayParticle(
+        const std::string& name,
+        const SpeciesProperties& properties,
+        double density)
+    {
+        ParticleTypeData particle;
+        particle.name = name;
+        particle.count = static_cast<int>(
+            std::clamp(density / 1e18, 1.0, 100000.0));
+        particle.energy = properties.charge > 0 ? 50.0f : 5.0f;
+        particle.halfAngle = properties.charge > 0 ? 20.0f : 60.0f;
+        particle.interval = 10;
+        particle.deposit = false;
+        particle.draw = true;
+        particle.iedf.energyCenters = { particle.energy };
+        particle.iedf.pdf = { 1.0f };
+        return particle;
+    }
+}
+
 // ---------------- RANDOM --------------------------
 namespace Mathf {
     float randomFloat(float max) {
@@ -169,14 +379,12 @@ void renderMesh(Simulation& simulation) {
 
     bool pause = 1;
     bool draw = 1;
-    bool ion = 0;
-
     // Initialize Measurment function
     Measure measure;
     
     int duration = 3000;
 
-    int voxelType = 1;
+    int voxelType = 0;
     int solid = 1;
     
 
@@ -189,7 +397,6 @@ void renderMesh(Simulation& simulation) {
 
     int typesOfVoxels = 3;
     
-    int selectedParticleType = 0;
     int typesOfParticles = 4;
     char fileName2[256] = "slice.txt";
     int sliceDir = 2;     // 0=XY, 1=XZ, 2=YZ
@@ -227,9 +434,7 @@ void renderMesh(Simulation& simulation) {
         GL_CLAMP_TO_EDGE
     );
 
-    std::vector<ParticleTypeData> particleTypes(typesOfParticles);
-
-    vector<float> gridData(typesOfParticles * typesOfVoxels * 3, 0.0f);
+    vector<float> gridData;
 
     static char gridFilename[256] = "grid.dat";
     static char dllFile[256] = "stack.dll";
@@ -254,6 +459,12 @@ void renderMesh(Simulation& simulation) {
 
     static BulkModel bulk;
     static Sheath sheath;
+
+    bulk.pump = 10.0;
+
+    bulk.densities["e-"] = 1e21;
+    bulk.densities["Ar+"] = 1e21;
+    bulk.densities["Ar"] = 1e21;
 
     bulk.dt = 1e-9;
     bulk.duration = 1e-3;
@@ -402,36 +613,29 @@ void renderMesh(Simulation& simulation) {
         }
     };
 
-    advanceModel(bulk);
+    advanceModelForDuration(bulk);
 
     initializeSheath(bulk, sheath);
 
     vector<ParticleTypeData> particleDataTypes = generateParticles(bulk, sheath);
+    typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+    setDefaultProbabilities(gridData, typesOfParticles, typesOfVoxels);
+
+    std::vector<std::string> spraySpeciesNames;
+    for (const auto& species : Species)
+    {
+        if (species.first != "e-")
+            spraySpeciesNames.push_back(species.first);
+    }
+    std::sort(spraySpeciesNames.begin(), spraySpeciesNames.end());
+    int selectedSpraySpecies = 0;
+
+    bool forceMeshBuild = true;
+    float lastBuildYaw = yaw;
+    float lastBuildPitch = pitch;
+    float lastBuildDistance = D;
 
     while (!glfwWindowShouldClose(window)) {
-
-        static bool initialized = false;
-
-        if (!initialized)
-        {
-            //---------------------------------------
-            // Initialize bulk model once
-            //---------------------------------------
-
-            bulk.dt = 1e-7;
-            bulk.Pabs = 500.0;
-            bulk.Area = 1e-4;
-            bulk.Volume = 1e-3;
-            bulk.pump = 10.0;
-            bulk.Te0 = 3.0;
-
-            // Example densities
-            bulk.densities["e"] = 1e16;
-            bulk.densities["Ar+"] = 1e16;
-            bulk.densities["Ar"] = 1e20;
-
-            initialized = true;
-        }
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -491,46 +695,10 @@ void renderMesh(Simulation& simulation) {
 
 
 
-        //
-        // ========================= PARTICLE WINDOW =========================
-        //
-        ImGui::Begin("Particle Controls");
-
-        ImGui::InputInt("Particle Types", &typesOfParticles);
-
-        if (typesOfParticles < 1)
-            typesOfParticles = 1;
-
-        if (particleTypes.size() != typesOfParticles)
-        {
-            particleTypes.resize(typesOfParticles);
-        }
-
+        ImGui::Begin("Plasma Model");
         ImGui::SliderInt("Duration", &duration, 0, 50000);
-        ImGui::SliderInt(
-            "Selected Particle Type",
-            &selectedParticleType,
-            0,
-            typesOfParticles - 1
-        );
-
-        ParticleTypeData& p =
-            particleTypes[selectedParticleType];
-
-        ImGui::InputInt("Particle Count", &p.count);
-        ImGui::InputFloat("Mean Energy", &p.energy);
-        ImGui::InputFloat("Std Dev", &p.stddev);
-        ImGui::InputFloat("Half Angle", &p.halfAngle);
-        ImGui::InputInt("Release Interval", &p.interval);
-
-        if (p.interval < 1)
-            p.interval = 1;
-
-        ImGui::Checkbox("Deposit", &p.deposit);
-
         ImGui::Checkbox("Pause", &pause);
         ImGui::Checkbox("Draw", &draw);
-
 
         if (ImGui::Button("Reset"))
         {
@@ -542,27 +710,270 @@ void renderMesh(Simulation& simulation) {
             mesh.initGPU();
             mesh.setVoxelBuffer(simulation.voxelSSBO);
             mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+            forceMeshBuild = false;
         }
 
-        ImGui::End();
+        ImGui::Separator();
+        ImGui::InputDouble("Electron Temp (eV)", &bulk.Te0, 0.1, 1.0, "%.3f");
+        ImGui::InputDouble("Absorbed Power (W)", &bulk.Pabs, 1.0, 10.0, "%.3f");
+        ImGui::InputDouble("Pump Rate", &bulk.pump, 0.1, 1.0, "%.3f");
+        ImGui::InputDouble("Neutral Gas Density", &bulk.Ngas, 1e18, 1e19, "%.3e");
+        ImGui::InputDouble("Time Step", &bulk.dt, 1e-10, 1e-9, "%.3e");
+        ImGui::InputDouble("Model Duration", &bulk.duration, 1e-5, 1e-4, "%.3e");
 
-        
-        // ========================= PROBABILITY WINDOW ========================= //
-        
-        ImGui::Begin("Reaction Probability Grid");
-        RenderDynamicInputGrid(typesOfParticles, typesOfVoxels, gridData, 0);
-        ImGui::End();
+        if (ImGui::Button("Run Plasma Model"))
+        {
+            const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
+            const std::vector<float> oldGrid = gridData;
 
-        // ========================= DEPOSIT WINDOW ========================= //
+            advanceModelForDuration(bulk);
+            initializeSheath(bulk, sheath);
+            particleDataTypes = generateParticles(bulk, sheath);
 
-        ImGui::Begin("Deposit Probability Grid");
-        RenderDynamicInputGrid(typesOfParticles, typesOfVoxels, gridData, 1);
-        ImGui::End();
+            for (const ParticleTypeData& oldParticle : oldParticles)
+            {
+                bool alreadyFireable = false;
+                for (const ParticleTypeData& particle : particleDataTypes)
+                {
+                    if (particle.name == oldParticle.name)
+                    {
+                        alreadyFireable = true;
+                        break;
+                    }
+                }
 
-        // ========================= ADSORB WINDOW ========================= //
+                if (!alreadyFireable)
+                    particleDataTypes.push_back(oldParticle);
+            }
 
-        ImGui::Begin("Adsorb Probability Grid");
-        RenderDynamicInputGrid(typesOfParticles, typesOfVoxels, gridData, 2);
+            typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+            rebuildProbabilityGrid(
+                oldParticles,
+                oldGrid,
+                particleDataTypes,
+                typesOfVoxels,
+                gridData);
+            frame = 0;
+            tickTime = 0;
+        }
+
+        ImGui::Text("Sheath Voltage: %.3f V", sheath.voltage);
+        ImGui::Text("Sheath Thickness: %.3e m", sheath.thickness);
+        ImGui::Text("Generated Ion Species: %d", static_cast<int>(particleDataTypes.size()));
+
+        if (ImGui::BeginTable("GeneratedIons", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+        {
+            ImGui::TableSetupColumn("Particle");
+            ImGui::TableSetupColumn("Density");
+            ImGui::TableSetupColumn("Particles");
+            ImGui::TableSetupColumn("Bins");
+            ImGui::TableHeadersRow();
+
+            for (const ParticleTypeData& particle : particleDataTypes)
+            {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%s", particle.name.c_str());
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%.3e", bulk.densities[particle.name]);
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("%d", particle.count);
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%d", static_cast<int>(particle.iedf.pdf.size()));
+            }
+
+            ImGui::EndTable();
+        }
+
+        ImGui::Separator();
+
+        if (!spraySpeciesNames.empty())
+        {
+            selectedSpraySpecies = std::clamp(
+                selectedSpraySpecies,
+                0,
+                static_cast<int>(spraySpeciesNames.size()) - 1);
+
+            if (ImGui::BeginCombo(
+                "Spray Species",
+                spraySpeciesNames[selectedSpraySpecies].c_str()))
+            {
+                for (int i = 0; i < static_cast<int>(spraySpeciesNames.size()); ++i)
+                {
+                    const bool selected = i == selectedSpraySpecies;
+                    if (ImGui::Selectable(spraySpeciesNames[i].c_str(), selected))
+                        selectedSpraySpecies = i;
+                    if (selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            if (ImGui::Button("Add Spray Particle"))
+            {
+                const std::string& name = spraySpeciesNames[selectedSpraySpecies];
+                bool alreadyFireable = false;
+
+                for (const ParticleTypeData& particle : particleDataTypes)
+                {
+                    if (particle.name == name)
+                    {
+                        alreadyFireable = true;
+                        break;
+                    }
+                }
+
+                if (!alreadyFireable)
+                {
+                    const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
+                    const std::vector<float> oldGrid = gridData;
+                    particleDataTypes.push_back(
+                        makeSprayParticle(
+                            name,
+                            Species[name],
+                            bulk.densities[name]));
+                    typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+                    rebuildProbabilityGrid(
+                        oldParticles,
+                        oldGrid,
+                        particleDataTypes,
+                        typesOfVoxels,
+                        gridData);
+                }
+            }
+        }
+
+        if (ImGui::BeginTable("FireableParticles", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+        {
+            ImGui::TableSetupColumn("Particle");
+            ImGui::TableSetupColumn("Charge");
+            ImGui::TableSetupColumn("Count");
+            ImGui::TableSetupColumn("Energy");
+            ImGui::TableSetupColumn("Angle");
+            ImGui::TableSetupColumn("Deposit");
+            ImGui::TableSetupColumn("Remove");
+            ImGui::TableHeadersRow();
+
+            int removeParticle = -1;
+            for (int i = 0; i < static_cast<int>(particleDataTypes.size()); ++i)
+            {
+                ParticleTypeData& particle = particleDataTypes[i];
+                ImGui::PushID(i);
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%s", particle.name.c_str());
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%d", Species[particle.name].charge);
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::InputInt("##count", &particle.count);
+                if (particle.count < 1)
+                    particle.count = 1;
+
+                ImGui::TableSetColumnIndex(3);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::InputFloat("##energy", &particle.energy))
+                {
+                    if (particle.energy < 0.01f)
+                        particle.energy = 0.01f;
+                    particle.iedf.energyCenters = { particle.energy };
+                    particle.iedf.pdf = { 1.0f };
+                }
+
+                ImGui::TableSetColumnIndex(4);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::InputFloat("##angle", &particle.halfAngle);
+                particle.halfAngle = std::clamp(particle.halfAngle, 0.0f, 89.0f);
+
+                ImGui::TableSetColumnIndex(5);
+                ImGui::Checkbox("##deposit", &particle.deposit);
+
+                ImGui::TableSetColumnIndex(6);
+                if (ImGui::Button("Remove"))
+                    removeParticle = i;
+
+                ImGui::PopID();
+            }
+
+            if (removeParticle >= 0)
+            {
+                const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
+                const std::vector<float> oldGrid = gridData;
+                particleDataTypes.erase(particleDataTypes.begin() + removeParticle);
+                typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+                rebuildProbabilityGrid(
+                    oldParticles,
+                    oldGrid,
+                    particleDataTypes,
+                    typesOfVoxels,
+                    gridData);
+            }
+
+            ImGui::EndTable();
+        }
+
+        if (ImGui::CollapsingHeader("Surface Probabilities", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            for (int voxel = 0; voxel < typesOfVoxels; ++voxel)
+            {
+                ImGui::PushID(voxel);
+                if (ImGui::TreeNode("Voxel Type", "Voxel Type %d", voxel))
+                {
+                    if (ImGui::BeginTable("SurfaceProbabilityTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+                    {
+                        ImGui::TableSetupColumn("Particle");
+                        ImGui::TableSetupColumn("Reaction");
+                        ImGui::TableSetupColumn("Deposit");
+                        ImGui::TableSetupColumn("Adsorb");
+                        ImGui::TableHeadersRow();
+
+                        for (int particle = 0; particle < static_cast<int>(particleDataTypes.size()); ++particle)
+                        {
+                            ImGui::PushID(particle);
+                            ImGui::TableNextRow();
+
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::Text("%s", particleDataTypes[particle].name.c_str());
+
+                            for (int kind = 0; kind < 3; ++kind)
+                            {
+                                ImGui::TableSetColumnIndex(kind + 1);
+                                float& probability =
+                                    gridData[
+                                        probabilityIndex(
+                                            particle,
+                                            voxel,
+                                            kind,
+                                            typesOfParticles,
+                                            typesOfVoxels)];
+                                ImGui::SetNextItemWidth(-FLT_MIN);
+                                ImGui::InputFloat("##prob", &probability, 0.01f, 0.1f, "%.3f");
+                                probability = std::clamp(probability, 0.0f, 1.0f);
+                            }
+
+                            ImGui::PopID();
+                        }
+
+                        ImGui::EndTable();
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+        }
+
+        if (ImGui::CollapsingHeader("Species Densities"))
+        {
+            for (const auto& species : Species)
+            {
+                double& density = bulk.densities[species.first];
+                ImGui::InputDouble(species.first.c_str(), &density, 1e18, 1e19, "%.3e");
+            }
+        }
+
         ImGui::End();
 
         
@@ -572,7 +983,7 @@ void renderMesh(Simulation& simulation) {
 
         ImGui::Text("Voxel Settings");
 
-        ImGui::SliderInt("Voxel Type", &voxelType, 1, 3);
+        ImGui::SliderInt("Voxel Type", &voxelType, 0, typesOfVoxels - 1);
         ImGui::InputFloat("Threshold", &voxelThreshold);
         ImGui::InputFloat("Deposit Threshold", &voxelDepositThreshold);
         ImGui::SliderInt("Solid", &solid, 0, 1);
@@ -599,10 +1010,18 @@ void renderMesh(Simulation& simulation) {
             voxel.threshold = voxelThreshold;
             voxel.depositThreshold = voxelDepositThreshold;
 
-            simulation.initRectangle(voxel, x0, y0, z0, x1, y1, z1);
+            int safeX0 = std::clamp(std::min(x0, x1), 0, simulation.grid.X);
+            int safeX1 = std::clamp(std::max(x0, x1), 0, simulation.grid.X);
+            int safeY0 = std::clamp(std::min(y0, y1), 0, simulation.grid.Y);
+            int safeY1 = std::clamp(std::max(y0, y1), 0, simulation.grid.Y);
+            int safeZ0 = std::clamp(std::min(z0, z1), 0, simulation.grid.Z);
+            int safeZ1 = std::clamp(std::max(z0, z1), 0, simulation.grid.Z);
+
+            simulation.initRectangle(voxel, safeX0, safeY0, safeZ0, safeX1, safeY1, safeZ1);
 
             v = simulation.grid.voxels;
             simulation.uploadVoxels(v);
+            forceMeshBuild = true;
         }
 
         ImGui::End();
@@ -641,17 +1060,20 @@ void renderMesh(Simulation& simulation) {
                 out.write((char*)&typesOfParticles, sizeof(typesOfParticles));
 
                 // Particle types
-                size_t particleCount = particleTypes.size();
+                size_t particleCount = particleDataTypes.size();
 
-                out.write(
-                    (char*)&particleCount,
-                    sizeof(particleCount)
-                );
+                const uint32_t serializedParticleCount =
+                    static_cast<uint32_t>(particleCount);
 
-                out.write(
-                    (char*)particleTypes.data(),
-                    particleCount * sizeof(ParticleTypeData)
-                );
+                writeValue(out, PARTICLE_DATA_MAGIC);
+                writeValue(out, PARTICLE_DATA_VERSION);
+                writeValue(out, serializedParticleCount);
+
+                for (const ParticleTypeData& particle : particleDataTypes)
+                {
+                    if (!writeParticleType(out, particle))
+                        break;
+                }
 
                 // Reaction / Deposit / Adsorb grid
                 size_t gridSize = gridData.size();
@@ -698,44 +1120,73 @@ void renderMesh(Simulation& simulation) {
                     in.read((char*)&typesOfParticles, sizeof(typesOfParticles));
 
                     // Particle types
-                    size_t particleCount;
+                    uint32_t particleMagic = 0;
+                    uint32_t particleVersion = 0;
+                    uint32_t particleCount = 0;
 
-                    in.read(
-                        (char*)&particleCount,
-                        sizeof(particleCount)
-                    );
+                    bool validParticleData =
+                        readValue(in, particleMagic) &&
+                        readValue(in, particleVersion) &&
+                        readValue(in, particleCount) &&
+                        particleMagic == PARTICLE_DATA_MAGIC &&
+                        particleVersion == PARTICLE_DATA_VERSION &&
+                        particleCount <= MAX_SERIALIZED_ITEMS;
 
-                    particleTypes.resize(particleCount);
+                    if (validParticleData)
+                    {
+                        particleDataTypes.resize(particleCount);
+                        for (ParticleTypeData& particle : particleDataTypes)
+                        {
+                            if (!readParticleType(in, particle))
+                            {
+                                validParticleData = false;
+                                break;
+                            }
+                        }
+                    }
 
-                    in.read(
-                        (char*)particleTypes.data(),
-                        particleCount * sizeof(ParticleTypeData)
-                    );
+                    size_t gridSize = 0;
+                    if (validParticleData)
+                    {
+                        in.read((char*)&gridSize, sizeof(gridSize));
+                        validParticleData =
+                            static_cast<bool>(in) &&
+                            gridSize <= MAX_SERIALIZED_ITEMS;
+                    }
 
-                    // Grid data
-                    size_t gridSize;
+                    if (validParticleData)
+                    {
+                        gridData.resize(gridSize);
+                        in.read(
+                            (char*)gridData.data(),
+                            gridSize * sizeof(float)
+                        );
+                        validParticleData = static_cast<bool>(in);
+                    }
 
-                    in.read((char*)&gridSize, sizeof(gridSize));
+                    if (!validParticleData)
+                    {
+                        std::cout
+                            << "Grid file uses an unsupported or corrupt "
+                               "particle-data format.\n";
+                        in.close();
+                    }
+                    else
+                    {
+                        in.close();
 
-                    gridData.resize(gridSize);
+                        simulation.uploadVoxels(
+                            simulation.grid.voxels
+                        );
 
-                    in.read(
-                        (char*)gridData.data(),
-                        gridSize * sizeof(float)
-                    );
+                        mesh.initGPU();
+                        mesh.setVoxelBuffer(simulation.voxelSSBO);
+                        mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+                        forceMeshBuild = false;
 
-                    in.close();
-
-                    simulation.uploadVoxels(
-                        simulation.grid.voxels
-                    );
-
-                    mesh.initGPU();
-                    mesh.setVoxelBuffer(simulation.voxelSSBO);
-                    mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
-
-                    std::cout << "Loaded grid + settings from: "
-                        << gridFilename << std::endl;
+                        std::cout << "Loaded grid + settings from: "
+                            << gridFilename << std::endl;
+                    }
                 }
                 else
                 {
@@ -876,9 +1327,11 @@ void renderMesh(Simulation& simulation) {
                     {
                         ParticleTypeData p = particleDataTypes[i];
                         // Upload particles
+
                         simulation.uploadParticles(
                             p,
                             i);
+
                     }
                 }
 
@@ -898,9 +1351,17 @@ void renderMesh(Simulation& simulation) {
             accumulator -= fixedDelta;
         }
         if (draw) {
-            if (draw && frame % 10 == 0) {
-                // In your render loop, before buildMesh():
+            const bool cameraChanged =
+                std::abs(yaw - lastBuildYaw) > 0.0001f ||
+                std::abs(pitch - lastBuildPitch) > 0.0001f ||
+                std::abs(D - lastBuildDistance) > 0.0001f;
+
+            if (forceMeshBuild || cameraChanged || (!pause && frame % 10 == 0)) {
                 mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+                lastBuildYaw = yaw;
+                lastBuildPitch = pitch;
+                lastBuildDistance = D;
+                forceMeshBuild = false;
             }
             mesh.draw();
         }

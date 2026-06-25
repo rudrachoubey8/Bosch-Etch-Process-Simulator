@@ -30,6 +30,7 @@ struct ParticleTypeData
 
     int interval = 10;
 
+    std::string name;
     EnergyDistribution iedf;
 };
 

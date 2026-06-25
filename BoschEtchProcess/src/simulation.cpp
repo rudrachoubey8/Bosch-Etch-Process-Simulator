@@ -1,5 +1,6 @@
 #include "simulation.h"
 #include "settings.h"
+#include <algorithm>
 #include <cmath>
 #include <random>
 #include <iostream>
@@ -85,7 +86,7 @@ void Simulation::initParticle(const Particle& particle) {
     particles.push_back(particle);
 }
 
-void Simulation::tick(std::vector<float> gridData, int typesOfVoxels, int typesOfParticles)
+void Simulation::tick(const std::vector<float>& gridData, int typesOfVoxels, int typesOfParticles)
 {
     bindBuffers();
 
@@ -99,12 +100,28 @@ void Simulation::setVoxel(int x, int y, int z, Voxel v) {
     grid.at(x, y, z) = v;
 }
 
-void Simulation::dispatchRayMarch(GLuint program, int particleCount, std::vector<float> gridData, int typesOfVoxels, int typesOfParticles)
+void Simulation::dispatchRayMarch(GLuint program, int particleCount, const std::vector<float>& gridData, int typesOfVoxels, int typesOfParticles)
 {
     glUseProgram(program);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, reactionProbabilitiesSSBO);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(float) * gridData.size(), gridData.data());
+    if (gridData.size() > reactionProbabilitiesCapacity)
+    {
+        glBufferData(
+            GL_SHADER_STORAGE_BUFFER,
+            sizeof(float) * gridData.size(),
+            gridData.data(),
+            GL_DYNAMIC_DRAW);
+        reactionProbabilitiesCapacity = gridData.size();
+    }
+    else if (!gridData.empty())
+    {
+        glBufferSubData(
+            GL_SHADER_STORAGE_BUFFER,
+            0,
+            sizeof(float) * gridData.size(),
+            gridData.data());
+    }
 
     glUniform1f(glGetUniformLocation(program, "voxelSize"), voxelSize);
     glUniform1i(glGetUniformLocation(program, "maxSteps"), MAX_STEPS);
@@ -127,6 +144,9 @@ void Simulation::dispatchRayMarch(GLuint program, int particleCount, std::vector
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticlesCount);
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
     }
+
+    if (particleCount <= 0)
+        return;
 
     int groups = (particleCount + 255) / 256;
     
@@ -234,9 +254,10 @@ void Simulation::createBuffers() {
 
     glGenBuffers(1, &reactionProbabilitiesSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, reactionProbabilitiesSSBO);
+    reactionProbabilitiesCapacity = 100;
     glBufferData(
         GL_SHADER_STORAGE_BUFFER,
-        sizeof(float) * 100,
+        sizeof(float) * reactionProbabilitiesCapacity,
         nullptr,
         GL_DYNAMIC_DRAW
     );
@@ -271,6 +292,8 @@ void Simulation::createBuffers() {
         GL_DYNAMIC_DRAW
     );
 
+    glGenBuffers(1, &iedfSSBO);
+
 }
 
 void Simulation::bindBuffers(){
@@ -283,6 +306,8 @@ void Simulation::bindBuffers(){
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, counterSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, finalParticlesCount);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, finalParticles);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 11, iedfSSBO);
+
 
 }
 
@@ -301,6 +326,15 @@ void Simulation::uploadParticles(
     std::vector<EnergyBin> bins;
 
     float cumulative = 0.0f;
+    
+    if (p.iedf.energyCenters.size() != p.iedf.pdf.size())
+        return;
+
+    if (p.iedf.pdf.empty())
+    {
+        p.iedf.energyCenters = { std::max(p.energy, 0.01f) };
+        p.iedf.pdf = { 1.0f };
+    }
 
     for (int i = 0; i < p.iedf.pdf.size(); i++)
     {
@@ -316,6 +350,16 @@ void Simulation::uploadParticles(
     if (!bins.empty())
         bins.back().cdf = 1.0f;
 
+    const uint32_t startIndex = static_cast<uint32_t>(getParticleCount());
+    const uint32_t available =
+        startIndex < MAX_PARTICLES ? MAX_PARTICLES - startIndex : 0;
+    const uint32_t particleCount = std::min(
+        static_cast<uint32_t>(std::max(p.count, 0)),
+        available);
+
+    if (bins.empty() || particleCount == 0)
+        return;
+
     // Upload IEDF
     glBindBuffer(
         GL_SHADER_STORAGE_BUFFER,
@@ -326,10 +370,9 @@ void Simulation::uploadParticles(
         bins.size() * sizeof(EnergyBin),
         bins.data(),
         GL_DYNAMIC_DRAW);
-
     glBindBufferBase(
         GL_SHADER_STORAGE_BUFFER,
-        10,
+        11,
         iedfSSBO);
 
     // Init shader uniforms
@@ -339,13 +382,13 @@ void Simulation::uploadParticles(
         glGetUniformLocation(
             initParticlesProgram,
             "startIndex"),
-        getParticleCount());
+        startIndex);
 
     glUniform1ui(
         glGetUniformLocation(
             initParticlesProgram,
             "particleCount"),
-        p.count);
+        particleCount);
 
     glUniform1i(
         glGetUniformLocation(
@@ -393,11 +436,11 @@ void Simulation::uploadParticles(
         glGetUniformLocation(
             initParticlesProgram,
             "mass"),
-        SpeciesNames[particleType].mass);
-
+        Species[p.name].mass);
+    
     // Launch
     glDispatchCompute(
-        (p.count + 255) / 256,
+        (particleCount + 255) / 256,
         1,
         1);
 
