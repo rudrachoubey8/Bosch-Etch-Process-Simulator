@@ -275,6 +275,14 @@ bool buttonDown = false;
 
 void mouseCallback(GLFWwindow* window, double xpos, double ypos)
 {
+    ImGuiContext* imguiContext = ImGui::GetCurrentContext();
+    if (imguiContext && ImGui::GetIO().WantCaptureMouse)
+    {
+        lastMouseX = xpos;
+        lastMouseY = ypos;
+        return;
+    }
+
     if (firstMouse)
     {
         lastMouseX = xpos;
@@ -302,6 +310,14 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos)
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
+    ImGuiContext* imguiContext = ImGui::GetCurrentContext();
+    if (imguiContext && ImGui::GetIO().WantCaptureMouse)
+    {
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+            buttonDown = false;
+        return;
+    }
+
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
         buttonDown = true;
@@ -314,6 +330,10 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 {
+    ImGuiContext* imguiContext = ImGui::GetCurrentContext();
+    if (imguiContext && ImGui::GetIO().WantCaptureMouse)
+        return;
+
     D -= yoffset * 0.3f;
 
     if (D < 0.3f) D = 0.3f;
@@ -460,21 +480,56 @@ void renderMesh(Simulation& simulation) {
     static BulkModel bulk;
     static Sheath sheath;
 
-    bulk.pump = 10.0;
-
-    bulk.densities["e-"] = 1e21;
-    bulk.densities["Ar+"] = 1e21;
-    bulk.densities["Ar"] = 1e21;
-
     bulk.dt = 1e-9;
     bulk.duration = 1e-3;
 
     bulk.Te0 = 3.0;
 
-    bulk.Area = 0.01;                        // substrate area
-    bulk.Volume = PI * 0.1 * 0.1 * 0.03;       // cylinder radius=10 cm, height=3 cm
+    const double reactorRadius = 0.1;
+    const double reactorLength = 0.03;
+    bulk.Volume = PI * reactorRadius * reactorRadius * reactorLength;
+    bulk.Area = 2.0 * PI * reactorRadius * reactorLength +
+        2.0 * PI * reactorRadius * reactorRadius;
+    bulk.substrateArea = 0.01;
+    bulk.pressureMtorr = 10.0;
+    bulk.gasTemp = 373.0;
+    bulk.Pabs = 700.0 * 0.3;
+    bulk.biasPower = 200.0;
+    bulk.biasFrequency = 2.0e6;
+    bulk.biasVoltageGuess = 100.0;
+    bulk.residualVoltageRipple = 20.0;
+    bulk.sheathPoints = 240;
+    bulk.sheathIterations = 20;
+    bulk.ionCount = 5000;
+    bulk.ionDt = 1e-9;
+    bulk.maxCycles = 20;
+    bulk.enableChargeExchange = true;
+    bulk.enableMomentumTransfer = true;
+    bulk.chargeExchangeScale = 0.1;
+    bulk.momentumTransferScale = 1.0;
+    bulk.useBias = true;
+    bulk.motherNeutralFlowSccm = {
+        {"Ar", 40.0},
+        {"C4F8", 200.0}
+    };
 
-    bulk.Pabs = 700.0 * 0.3;                   // 210 W absorbed
+    const double pressurePa = bulk.pressureMtorr * 0.133322;
+    const double totalFlowSccm = 240.0;
+    const double totalGasDensity = pressurePa / (K_B * bulk.gasTemp);
+    for (const auto& species : Species)
+    {
+        bulk.densities[species.first] = species.second.charge == 0 ? 1.0 : 0.0;
+    }
+    bulk.densities["Ar"] = totalGasDensity * (40.0 / totalFlowSccm);
+    bulk.densities["C4F8"] = totalGasDensity * (200.0 / totalFlowSccm);
+    bulk.densities["CF3+"] = 2.0e18;
+    bulk.densities["CF2+"] = 2.0e18;
+    bulk.densities["Ar+"] = 2.0e18;
+    bulk.densities["e-"] = 2.0e18;
+    bulk.Ngas = totalGasDensity;
+    const double ndotTotal = totalFlowSccm * 4.48e17;
+    bulk.pump = (ndotTotal * K_B * bulk.gasTemp / pressurePa) / bulk.Volume;
+
     bulk.reactions =
     {
         // Ar + e- -> Ar* + e-
@@ -714,12 +769,24 @@ void renderMesh(Simulation& simulation) {
         }
 
         ImGui::Separator();
-        ImGui::InputDouble("Electron Temp (eV)", &bulk.Te0, 0.1, 1.0, "%.3f");
+        ImGui::Text("Electron Temp: %.3f eV", bulk.Te0);
         ImGui::InputDouble("Absorbed Power (W)", &bulk.Pabs, 1.0, 10.0, "%.3f");
         ImGui::InputDouble("Pump Rate", &bulk.pump, 0.1, 1.0, "%.3f");
-        ImGui::InputDouble("Neutral Gas Density", &bulk.Ngas, 1e18, 1e19, "%.3e");
+        ImGui::Text("Neutral Gas Density: %.3e m^-3", bulk.Ngas);
         ImGui::InputDouble("Time Step", &bulk.dt, 1e-10, 1e-9, "%.3e");
         ImGui::InputDouble("Model Duration", &bulk.duration, 1e-5, 1e-4, "%.3e");
+        ImGui::InputDouble("Bias Power (W)", &bulk.biasPower, 1.0, 10.0, "%.3f");
+        ImGui::InputDouble("Bias Frequency (Hz)", &bulk.biasFrequency, 1e5, 1e6, "%.3e");
+        ImGui::InputDouble("Bias Voltage Guess (V)", &bulk.biasVoltageGuess, 1.0, 10.0, "%.3f");
+        ImGui::InputInt("Sheath Points", &bulk.sheathPoints);
+        ImGui::InputInt("Sheath Iterations", &bulk.sheathIterations);
+        ImGui::InputInt("Transport Ions", &bulk.ionCount);
+        ImGui::InputDouble("Ion Time Step", &bulk.ionDt, 1e-10, 1e-9, "%.3e");
+        ImGui::InputInt("Max RF Cycles", &bulk.maxCycles);
+        ImGui::Checkbox("Momentum Transfer", &bulk.enableMomentumTransfer);
+        ImGui::Checkbox("Charge Exchange", &bulk.enableChargeExchange);
+        ImGui::InputDouble("MT Scale", &bulk.momentumTransferScale, 0.1, 1.0, "%.3f");
+        ImGui::InputDouble("CX Scale", &bulk.chargeExchangeScale, 0.01, 0.1, "%.3f");
 
         if (ImGui::Button("Run Plasma Model"))
         {
@@ -757,8 +824,28 @@ void renderMesh(Simulation& simulation) {
             tickTime = 0;
         }
 
-        ImGui::Text("Sheath Voltage: %.3f V", sheath.voltage);
-        ImGui::Text("Sheath Thickness: %.3e m", sheath.thickness);
+        if (!sheath.voltageWaveform.empty() && !sheath.thicknessWaveform.empty())
+        {
+            const auto voltageRange = std::minmax_element(
+                sheath.voltageWaveform.begin(),
+                sheath.voltageWaveform.end());
+            const auto thicknessRange = std::minmax_element(
+                sheath.thicknessWaveform.begin(),
+                sheath.thicknessWaveform.end());
+            ImGui::Text(
+                "Sheath Voltage: %.3f to %.3f V",
+                *voltageRange.first,
+                *voltageRange.second);
+            ImGui::Text(
+                "Sheath Thickness: %.3e to %.3e m",
+                *thicknessRange.first,
+                *thicknessRange.second);
+        }
+        else
+        {
+            ImGui::Text("Sheath Voltage: %.3f V", sheath.voltage);
+            ImGui::Text("Sheath Thickness: %.3e m", sheath.thickness);
+        }
         ImGui::Text("Generated Ion Species: %d", static_cast<int>(particleDataTypes.size()));
 
         if (ImGui::BeginTable("GeneratedIons", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
@@ -967,10 +1054,25 @@ void renderMesh(Simulation& simulation) {
 
         if (ImGui::CollapsingHeader("Species Densities"))
         {
-            for (const auto& species : Species)
+            if (ImGui::BeginTable("SpeciesDensityTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
             {
-                double& density = bulk.densities[species.first];
-                ImGui::InputDouble(species.first.c_str(), &density, 1e18, 1e19, "%.3e");
+                ImGui::TableSetupColumn("Species");
+                ImGui::TableSetupColumn("Charge");
+                ImGui::TableSetupColumn("Density");
+                ImGui::TableHeadersRow();
+
+                for (const auto& species : Species)
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%s", species.first.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%d", species.second.charge);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%.3e", bulk.densities[species.first]);
+                }
+
+                ImGui::EndTable();
             }
         }
 

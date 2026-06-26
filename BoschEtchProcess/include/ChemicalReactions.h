@@ -64,6 +64,9 @@ struct BulkModel
 	// In density terms
 	std::unordered_map<std::string, double> inPump;
 
+	// Inlet flow in SCCM for the mother neutrals.
+	std::unordered_map<std::string, double> motherNeutralFlowSccm;
+
 	// chemistry
 	std::vector<Reaction> reactions;
 
@@ -84,11 +87,32 @@ struct BulkModel
 	double Ngas = 2.6e20;
 	double Pabs;
 	double pump;
+
+	double pressureMtorr = 10.0;
+	double gasTemp = 373.0;
+	double substrateArea = 0.01;
+	double biasPower = 200.0;
+	double biasFrequency = 2.0e6;
+	double biasVoltageGuess = 100.0;
+	double residualVoltageRipple = 20.0;
+	int sheathPoints = 240;
+	int sheathIterations = 20;
+	int ionCount = 5000;
+	double ionDt = 1e-9;
+	int maxCycles = 20;
+	bool enableChargeExchange = true;
+	bool enableMomentumTransfer = true;
+	double chargeExchangeScale = 0.1;
+	double momentumTransferScale = 1.0;
+	bool useBias = true;
 };
 
 struct Sheath {
 	float voltage;
 	float thickness;
+	std::vector<double> time;
+	std::vector<double> voltageWaveform;
+	std::vector<double> thicknessWaveform;
 };
 
 

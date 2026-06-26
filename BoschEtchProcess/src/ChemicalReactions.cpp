@@ -1,301 +1,490 @@
 #include "ChemicalReactions.h"
+
 #include <algorithm>
+#include <cmath>
 #include <iostream>
+#include <numeric>
+
+namespace
+{
+    constexpr double AVOGADRO = 6.02214076e23;
+    constexpr double SCCM_TO_PARTICLES_PER_SECOND = 4.48e17;
+
+    const std::vector<std::string> PUMP_SPECIES = {
+        "C4F8",
+        "Ar",
+        "Ar*",
+        "F-"
+    };
+
+    double clampValue(double value, double lo, double hi)
+    {
+        return std::max(lo, std::min(value, hi));
+    }
+
+    double bohmSpeed(double Te, double mass)
+    {
+        return std::sqrt(E_CHARGE * std::max(Te, 0.05) / std::max(mass, 1e-31));
+    }
+
+    double electronThermalSpeed(double Te)
+    {
+        return std::sqrt(8.0 * E_CHARGE * std::max(Te, 0.05) / (PI * E_MASS));
+    }
+
+    double gasThermalSpeed(double mass, double gasTemp)
+    {
+        return std::sqrt(8.0 * K_B * gasTemp / (PI * std::max(mass, 1e-31)));
+    }
+
+    bool isPumpedSpecies(const std::string& name)
+    {
+        return std::find(PUMP_SPECIES.begin(), PUMP_SPECIES.end(), name) != PUMP_SPECIES.end();
+    }
+
+    double getDensity(const BulkModel& bulk, const std::string& name)
+    {
+        const auto it = bulk.densities.find(name);
+        return it == bulk.densities.end() ? 0.0 : it->second;
+    }
+
+    double speciesDensityForRate(const BulkModel& bulk, const std::string& name)
+    {
+        const auto propIt = Species.find(name);
+        const double n = getDensity(bulk, name);
+        if (propIt == Species.end())
+            return std::max(n, 0.0);
+        if (propIt->second.charge == 0)
+            return std::max(n, 1.0);
+        return std::max(n, 0.0);
+    }
+
+    double effectiveIonMassDensityWeighted(const BulkModel& bulk)
+    {
+        double sumNi = 0.0;
+        double sumNiMi = 0.0;
+
+        for (const auto& p : Species)
+        {
+            if (p.second.charge <= 0)
+                continue;
+
+            const double ni = std::max(getDensity(bulk, p.first), 0.0);
+            sumNi += ni;
+            sumNiMi += ni * p.second.mass * AMU;
+        }
+
+        if (sumNi <= 0.0)
+            return 40.0 * AMU;
+
+        return std::max(sumNiMi / sumNi, AMU);
+    }
+
+    double totalIonCurrentDensity(const BulkModel& bulk, double Te)
+    {
+        double Ji = 0.0;
+        for (const auto& p : Species)
+        {
+            if (p.second.charge <= 0)
+                continue;
+
+            const double ni = std::max(getDensity(bulk, p.first), 0.0);
+            const double mass = p.second.mass * AMU;
+            Ji += p.second.charge * E_CHARGE * ni * bohmSpeed(Te, mass);
+        }
+        return Ji;
+    }
+
+    double totalNeutralDensity(const BulkModel& bulk)
+    {
+        double neutralDensity = 0.0;
+        for (const auto& p : Species)
+        {
+            if (p.second.charge == 0)
+                neutralDensity += std::max(getDensity(bulk, p.first), 0.0);
+        }
+        return neutralDensity;
+    }
+
+    double periodicLinearInterp(
+        const std::vector<double>& t,
+        const std::vector<double>& y,
+        double query)
+    {
+        if (t.empty() || y.empty())
+            return 0.0;
+        if (t.size() == 1 || y.size() == 1)
+            return y.front();
+
+        const double dt = t[1] - t[0];
+        const double period = t.back() + dt;
+        double tau = std::fmod(query, period);
+        if (tau < 0.0)
+            tau += period;
+
+        const auto upper = std::upper_bound(t.begin(), t.end(), tau);
+        if (upper == t.begin())
+            return y.front();
+
+        const std::size_t i0 = static_cast<std::size_t>((upper - t.begin()) - 1);
+        const std::size_t i1 = (i0 + 1) % y.size();
+        const double t0 = t[i0];
+        const double t1 = (i1 == 0) ? period : t[i1];
+        const double f = (tau - t0) / std::max(t1 - t0, 1e-30);
+        return y[i0] + f * (y[i1] - y[i0]);
+    }
+
+    double sheathCircuitRhs(
+        double tau,
+        double V,
+        const std::vector<double>& t,
+        const std::vector<double>& ds,
+        double Te,
+        double ne,
+        double IiTotal,
+        double Imax,
+        const BulkModel& bulk)
+    {
+        const double expo = clampValue(V / std::max(Te, 0.05), -50.0, 50.0);
+        const double Ie =
+            (E_CHARGE * electronThermalSpeed(Te) * ne * bulk.substrateArea / 4.0) *
+            std::exp(expo);
+        const double Irf =
+            bulk.useBias ? Imax * std::sin(2.0 * PI * bulk.biasFrequency * tau) : 0.0;
+        const double dNow = std::max(periodicLinearInterp(t, ds, tau), 1e-8);
+        const double Cs = std::max(EPS0 * bulk.substrateArea / dNow, 1e-15);
+
+        return (IiTotal - Ie - Irf) / Cs;
+    }
+
+    std::vector<double> smoothGaussian(const std::vector<double>& values, double sigma)
+    {
+        if (values.empty() || sigma <= 0.0)
+            return values;
+
+        const int radius = static_cast<int>(std::ceil(4.0 * sigma));
+        std::vector<double> kernel(2 * radius + 1);
+        double norm = 0.0;
+
+        for (int i = -radius; i <= radius; ++i)
+        {
+            const double w = std::exp(-0.5 * (i * i) / (sigma * sigma));
+            kernel[i + radius] = w;
+            norm += w;
+        }
+        for (double& w : kernel)
+            w /= norm;
+
+        std::vector<double> out(values.size(), 0.0);
+        for (std::size_t i = 0; i < values.size(); ++i)
+        {
+            double acc = 0.0;
+            for (int k = -radius; k <= radius; ++k)
+            {
+                const int idx = std::clamp<int>(
+                    static_cast<int>(i) + k,
+                    0,
+                    static_cast<int>(values.size()) - 1);
+                acc += values[idx] * kernel[k + radius];
+            }
+            out[i] = acc;
+        }
+        return out;
+    }
+}
+
 double sigmaCX(double E)
 {
     E = std::max(E, 0.1);
-    return 2.5e-19 * (1.0 + 0.15 * exp(-(E - 60.0) * (E - 60.0) / 3000.0));
+    return 2.5e-19 * (1.0 + 0.15 * std::exp(-((E - 60.0) * (E - 60.0)) / 3000.0));
 }
 
 double sigmaMT(double E)
-
 {
     E = std::max(E, 0.1);
-    return 1.4e-19 * (1.0 + 0.10 * exp(-(E - 30.0) * (E - 30.0) / 2000.0));
+    return 1.4e-19 * (1.0 + 0.10 * std::exp(-((E - 30.0) * (E - 30.0)) / 2000.0));
 }
 
 double electricField(double V, double x, double d)
 {
-    // E = -(3/2)*(V/d)*sqrt(x/d)
     if (d <= 1e-12)
         return 0.0;
 
-    double xi = std::clamp(x / d, 0.0, 1.0);
-    
-    return -(1.5 * V / d) * sqrt(xi);
+    const double xi = clampValue(x / d, 0.0, 1.0);
+    return -(1.5 * V / d) * std::sqrt(xi);
 }
 
-void advanceModel(BulkModel& bulk) {
-	std::unordered_map<std::string, double> densitiesRate;
-	
-	double dTe_dt = 0;
+void advanceModel(BulkModel& bulk)
+{
+    std::unordered_map<std::string, double> densitiesRate;
+    for (const auto& p : Species)
+    {
+        densitiesRate[p.first] = 0.0;
+        (void)bulk.densities[p.first];
+    }
 
-	for (const auto& p : bulk.densities) {
-		densitiesRate[p.first] = 0.0;
-	}
-	double Pinel = 0;
-	for (int i = 0;i < bulk.reactions.size();i++)
-	{
-		Reaction& rxn = bulk.reactions[i];
-		
-		// rxn = A+B -> C+D
-		// k = a * (Te)^b * (e^(-c/Te))
-		double k = rxn.a * pow(bulk.Te0, rxn.b) * exp(-rxn.c / bulk.Te0);
+    double Pinel = 0.0;
+    for (const Reaction& rxn : bulk.reactions)
+    {
+        const double Te = std::max(bulk.Te0, 0.05);
+        const double k = rxn.a * std::pow(Te, rxn.b) * std::exp(-rxn.c / Te);
 
-		// Rate = k[A]^(stoiA)[B]^stoi[b]
-		double R = k;
-		for (auto& p : rxn.reactants) {
-			R *= pow(bulk.densities[p.first], p.second);
-		}
+        double R = k;
+        for (const auto& p : rxn.reactants)
+            R *= std::pow(speciesDensityForRate(bulk, p.first), p.second);
 
-		if (!std::isfinite(R))
-			continue;
+        if (!std::isfinite(R))
+            continue;
 
-		// dn_i/dt = (stoichometric difference) * R
-		// subtract reactants
-		bool electronRxn = 0;
-		for (auto& p : rxn.reactants) {
-			if (p.first == "e-") {
-				electronRxn = 1;
-			}
-			densitiesRate[p.first] -= R * p.second;
-		}
-		if(electronRxn)
-			Pinel += R * rxn.energy * E_CHARGE;
-		// add products
-		for (auto& p : rxn.products) {
-			densitiesRate[p.first] += R * p.second;
-		}
+        bool electronRxn = false;
+        for (const auto& p : rxn.reactants)
+        {
+            if (p.first == "e-")
+                electronRxn = true;
+            densitiesRate[p.first] -= R * p.second;
+        }
 
-	}
+        if (electronRxn)
+            Pinel += R * rxn.energy;
 
+        for (const auto& p : rxn.products)
+            densitiesRate[p.first] += R * p.second;
+    }
 
-	double Psheath = 0;
-	double gammaI = 0.0;
+    for (const auto& flow : bulk.motherNeutralFlowSccm)
+        densitiesRate[flow.first] += flow.second * SCCM_TO_PARTICLES_PER_SECOND /
+            std::max(bulk.Volume, 1e-30);
 
-	for (auto& p : Species)
-	{	
-		densitiesRate[p.first] += bulk.inPump[p.first];
-		if (p.second.charge > 0)
-		{
-			double uB = sqrt(E_CHARGE * bulk.Te0 / (p.second.mass * AMU));
-			densitiesRate[p.first] -= bulk.densities[p.first] * uB * bulk.Area / bulk.Volume;
-			gammaI += bulk.densities[p.first] * uB;
-		}
-		if (p.second.charge == 0) {
-			densitiesRate[p.first] -= bulk.pump * bulk.densities[p.first];
-		}
-	}
+    for (const auto& p : Species)
+    {
+        densitiesRate[p.first] += bulk.inPump[p.first];
 
-	double effectiveIonMass = 0.0;
-	double ionDensity = 0.0;
-	for (const auto& p : Species)
-	{
-		if (p.second.charge > 0)
-		{
-			const double density = bulk.densities[p.first];
-			effectiveIonMass += density * p.second.mass * AMU;
-			ionDensity += density;
-		}
-	}
-	effectiveIonMass =
-		std::max(
-			effectiveIonMass / std::max(ionDensity, 1e-30),
-			AMU);
+        if (isPumpedSpecies(p.first))
+            densitiesRate[p.first] -= bulk.pump * speciesDensityForRate(bulk, p.first);
 
-	const double sheathEnergy =
-		bulk.Te0 * log(sqrt(effectiveIonMass / (2 * PI * E_MASS))) +
-		2.5 * bulk.Te0;
-	Psheath =
-		gammaI *
-		(bulk.Area / bulk.Volume) *
-		sheathEnergy *
-		E_CHARGE;
+        if (p.second.charge > 0)
+        {
+            const double mass = p.second.mass * AMU;
+            const double uB = bohmSpeed(bulk.Te0, mass);
+            densitiesRate[p.first] -= std::max(getDensity(bulk, p.first), 0.0) *
+                uB * bulk.Area / std::max(bulk.Volume, 1e-30);
+        }
+    }
 
-	const double absorbedPowerDensity = bulk.Pabs / bulk.Volume;
-	const double Ptotal = absorbedPowerDensity - (Psheath + Pinel);
-	const double electronDensity = std::max(bulk.densities["e-"], 1e12);
-	dTe_dt =
-		Ptotal / (1.5 * electronDensity * E_CHARGE) -
-		bulk.Te0 / electronDensity * densitiesRate["e-"];
-    
-	bulk.Te0 += dTe_dt * bulk.dt;
-	if (!std::isfinite(bulk.Te0) || bulk.Te0 < 0.01)
-		bulk.Te0 = 0.01;
-	for (auto& p : bulk.densities)
-	{
-		p.second += densitiesRate[p.first] * bulk.dt;
+    const double mRefIon = 50.0 * AMU;
+    const double ne = std::max(getDensity(bulk, "e-"), 1.0);
+    const double uBe = bohmSpeed(bulk.Te0, mRefIon);
+    densitiesRate["e-"] -= ne * uBe * bulk.Area / std::max(bulk.Volume, 1e-30);
 
-		if (!std::isfinite(p.second) || p.second < 0.0)
-			p.second = 0.0;
-	}
+    double gammaI = 0.0;
+    for (const auto& p : Species)
+    {
+        if (p.second.charge > 0)
+        {
+            const double mass = p.second.mass * AMU;
+            gammaI += std::max(getDensity(bulk, p.first), 0.0) *
+                bohmSpeed(bulk.Te0, mass);
+        }
+    }
+
+    const double VsCoeff = std::log(std::sqrt(std::max(mRefIon / (2.0 * PI * E_MASS), 1.0)));
+    const double VsEv = bulk.Te0 * VsCoeff;
+    const double Qsheath = gammaI * (bulk.Area / std::max(bulk.Volume, 1e-30)) *
+        (VsEv + 2.5 * bulk.Te0);
+    const double powerIn = bulk.Pabs / (std::max(bulk.Volume, 1e-30) * E_CHARGE);
+    const double neSafe = std::max(ne, 1e10);
+    const double dTeDt =
+        (powerIn - Pinel - Qsheath) / (1.5 * neSafe) -
+        (bulk.Te0 / neSafe) * densitiesRate["e-"];
+
+    bulk.Te0 += dTeDt * bulk.dt;
+    if (!std::isfinite(bulk.Te0) || bulk.Te0 < 0.05)
+        bulk.Te0 = 0.05;
+
+    for (auto& p : bulk.densities)
+    {
+        p.second += densitiesRate[p.first] * bulk.dt;
+
+        const auto propIt = Species.find(p.first);
+        const bool neutral = propIt != Species.end() && propIt->second.charge == 0;
+        const double floor = neutral ? 1.0 : 0.0;
+        if (!std::isfinite(p.second) || p.second < floor)
+            p.second = floor;
+    }
 }
 
 void advanceModelForDuration(BulkModel& bulk)
 {
-	if (bulk.dt <= 0.0 || bulk.duration <= 0.0)
-		return;
+    if (bulk.dt <= 0.0 || bulk.duration <= 0.0)
+        return;
 
-	constexpr std::uint64_t maxStartupSteps = 10000;
-	const auto requestedSteps = static_cast<std::uint64_t>(
-		std::ceil(bulk.duration / bulk.dt));
-	const auto steps = std::min(requestedSteps, maxStartupSteps);
+    constexpr std::uint64_t maxStartupSteps = 10000;
+    const auto requestedSteps = static_cast<std::uint64_t>(std::ceil(bulk.duration / bulk.dt));
+    const auto steps = std::min(requestedSteps, maxStartupSteps);
 
-	for (std::uint64_t step = 0; step < steps; ++step)
-	{
-		advanceModel(bulk);
+    for (std::uint64_t step = 0; step < steps; ++step)
+    {
+        advanceModel(bulk);
+        if (!std::isfinite(bulk.Te0))
+            break;
+    }
 
-		if (!std::isfinite(bulk.Te0))
-			break;
-	}
+    bulk.Ngas = totalNeutralDensity(bulk);
 }
+
 void initializeSheath(BulkModel& bulk, Sheath& sheath)
 {
-    // Electron density
-    double ne = std::max(
-        bulk.densities["e-"],
-        1e12
-    );
+    const int points = std::max(bulk.sheathPoints, 2);
+    const double Te = std::max(bulk.Te0, 0.05);
+    const double ne = std::max(getDensity(bulk, "e-"), 1e12);
+    const double period = 1.0 / std::max(bulk.biasFrequency, 1e-30);
+    const double dt = period / points;
+    const double M_eff = effectiveIonMassDensityWeighted(bulk);
+    const double JiBulk = std::max(totalIonCurrentDensity(bulk, Te), 0.0);
+    const double IiTotal = JiBulk * bulk.substrateArea;
+    const double Imax = bulk.useBias
+        ? 2.0 * bulk.biasPower / std::max(bulk.biasVoltageGuess, 1e-3)
+        : 0.0;
+    const double vScale = bulk.useBias ? bulk.biasVoltageGuess : bulk.residualVoltageRipple;
 
-    // Effective ion mass
-    double sumNi = 0.0;
-    double sumNiMi = 0.0;
+    sheath.time.resize(points);
+    sheath.voltageWaveform.resize(points);
+    sheath.thicknessWaveform.resize(points);
 
-    for (auto& p : Species)
+    for (int i = 0; i < points; ++i)
     {
-        if (p.second.charge > 0)
+        const double t = i * dt;
+        sheath.time[i] = t;
+        sheath.voltageWaveform[i] =
+            -vScale * (1.0 + 0.3 * std::sin(2.0 * PI * bulk.biasFrequency * t));
+        sheath.thicknessWaveform[i] =
+            150e-6 * (1.0 + 0.2 * std::sin(2.0 * PI * bulk.biasFrequency * t));
+    }
+
+    for (int it = 0; it < bulk.sheathIterations; ++it)
+    {
+        for (int i = 0; i < points; ++i)
         {
-            double ni = bulk.densities[p.first];
+            const double phi = clampValue(
+                sheath.voltageWaveform[i] / Te,
+                -45.0,
+                45.0);
+            const double VsAbs = std::max(std::abs(phi * Te), 1.0);
+            const double uB = bohmSpeed(Te, M_eff);
+            const double Ji = std::max(E_CHARGE * ne * uB, 1e-30);
+            const double factor = (4.0 * EPS0 / 9.0) *
+                std::sqrt(E_CHARGE / (2.0 * M_eff));
+            sheath.thicknessWaveform[i] = clampValue(
+                std::sqrt(factor * std::pow(VsAbs, 1.5) / Ji),
+                1e-6,
+                5e-3);
+        }
 
-            sumNi += ni;
+        std::vector<double> solved(points, sheath.voltageWaveform.front());
+        double V = sheath.voltageWaveform.front();
+        for (int i = 1; i < points; ++i)
+        {
+            const double t0 = sheath.time[i - 1];
+            const double k1 = sheathCircuitRhs(
+                t0, V, sheath.time, sheath.thicknessWaveform, Te, ne, IiTotal, Imax, bulk);
+            const double k2 = sheathCircuitRhs(
+                t0 + 0.5 * dt, V + 0.5 * dt * k1,
+                sheath.time, sheath.thicknessWaveform, Te, ne, IiTotal, Imax, bulk);
+            const double k3 = sheathCircuitRhs(
+                t0 + 0.5 * dt, V + 0.5 * dt * k2,
+                sheath.time, sheath.thicknessWaveform, Te, ne, IiTotal, Imax, bulk);
+            const double k4 = sheathCircuitRhs(
+                t0 + dt, V + dt * k3,
+                sheath.time, sheath.thicknessWaveform, Te, ne, IiTotal, Imax, bulk);
+            V += (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+            solved[i] = V;
+        }
 
-            sumNiMi +=
-                ni *
-                p.second.mass *
-                AMU;
+        for (int i = 0; i < points; ++i)
+        {
+            const int prev = (i + points - 1) % points;
+            sheath.voltageWaveform[i] = 0.5 * (solved[i] + solved[prev]);
         }
     }
 
-    double M_eff =
-        sumNiMi /
-        std::max(sumNi, 1e-30);
-    M_eff = std::max(M_eff, AMU);
+    sheath.voltage = static_cast<float>(
+        std::accumulate(
+            sheath.voltageWaveform.begin(),
+            sheath.voltageWaveform.end(),
+            0.0) /
+        std::max<std::size_t>(sheath.voltageWaveform.size(), 1));
+    sheath.thickness = static_cast<float>(
+        std::accumulate(
+            sheath.thicknessWaveform.begin(),
+            sheath.thicknessWaveform.end(),
+            0.0) /
+        std::max<std::size_t>(sheath.thicknessWaveform.size(), 1));
 
-    // Bohm speed
-    double uB =
-        sqrt(
-            E_CHARGE *
-            bulk.Te0 /
-            M_eff
-        );
-
-    // Bohm current density
-    double Ji =
-        E_CHARGE *
-        ne *
-        uB;
-
-    // Floating sheath voltage
-    sheath.voltage =
-        bulk.Te0 *
-        log(
-            sqrt(
-                M_eff /
-                (2.0 * PI * E_MASS)
-            )
-        );
-
-    // Child-Langmuir thickness
-    double factor =
-        (4.0 * EPS0 / 9.0)
-        *
-        sqrt(
-            E_CHARGE /
-            (2.0 * M_eff)
-        );
-
-    sheath.thickness =
-        sqrt(
-            factor *
-            pow(sheath.voltage, 1.5)
-            /
-            std::max(Ji, 1e-30)
-        );
     if (!std::isfinite(sheath.voltage))
         sheath.voltage = 0.0f;
     if (!std::isfinite(sheath.thickness) || sheath.thickness <= 0.0f)
         sheath.thickness = 1e-6f;
 }
 
-
 TransportResult transportSpecies(
     BulkModel& bulk,
     Sheath& sheath,
     double mass,
     double Ngas,
+    double ionDensity,
     int nParticles)
 {
     TransportResult result;
-    if (mass <= 0.0 || Ngas <= 0.0 || nParticles <= 0)
-        return result;
+    result.flux = 0.0;
 
-    double uB =
-        sqrt(E_CHARGE * bulk.Te0 / mass);
-
-    double dt = 1e-9;
-
-    std::mt19937 rng(1234);
-
-    std::uniform_real_distribution<double> phaseDist(
-        0.0,
-        1.0);
-
-    std::normal_distribution<double> bohmDist(
-        uB,
-        0.2 * uB);
-
-    for (int i = 0;i < nParticles;i++)
+    if (mass <= 0.0 || Ngas <= 0.0 || nParticles <= 0 ||
+        sheath.time.empty() || sheath.voltageWaveform.empty() ||
+        sheath.thicknessWaveform.empty())
     {
-        double x = sheath.thickness;
+        return result;
+    }
 
-        double v =
-            std::max(
-                bohmDist(rng),
-                0.0);
+    const double uB = bohmSpeed(bulk.Te0, mass);
+    result.flux = std::max(ionDensity, 0.0) * uB;
 
+    const double dt = std::max(bulk.ionDt, 1e-12);
+    const double period = sheath.time.back() +
+        (sheath.time.size() > 1 ? sheath.time[1] - sheath.time[0] : dt);
+    const int maxSteps = std::max(1, static_cast<int>(bulk.maxCycles * period / dt));
+
+    std::mt19937 rng(3);
+    std::uniform_real_distribution<double> phaseDist(0.0, 1.0);
+    std::normal_distribution<double> bohmDist(uB, 0.2 * uB);
+
+    for (int i = 0; i < nParticles; ++i)
+    {
+        double t0 = phaseDist(rng) * period;
+        double x = periodicLinearInterp(sheath.time, sheath.thicknessWaveform, t0);
+        double v = std::max(bohmDist(rng), 0.0);
         int cxCount = 0;
+        int steps = 0;
 
-        constexpr int maxTransportSteps = 100000;
-        int transportStep = 0;
-
-        while (x > 0.0 && transportStep++ < maxTransportSteps)
+        while (x > 0.0 && steps++ < maxSteps)
         {
-            // electric acceleration
-            double E =
-                electricField(
-                    sheath.voltage,
-                    x,
-                    sheath.thickness);
+            const double dNow = std::max(
+                periodicLinearInterp(sheath.time, sheath.thicknessWaveform, t0),
+                1e-8);
+            const double VNow = periodicLinearInterp(sheath.time, sheath.voltageWaveform, t0);
+            const double E = electricField(VNow, x, dNow);
+            const double aE = E_CHARGE * E / mass;
+            const double Eion = 0.5 * mass * v * v / E_CHARGE;
+            const double vth = gasThermalSpeed(mass, bulk.gasTemp);
+            const double vrel = std::max(std::abs(v), vth);
 
-            double a =
-                -E_CHARGE * E / mass;
+            const double sigMt = bulk.enableMomentumTransfer
+                ? bulk.momentumTransferScale * sigmaMT(Eion)
+                : 0.0;
+            const double nuM = Ngas * sigMt * vrel;
 
-            // momentum transfer
-            double Eion =
-                0.5 * mass * v * v / E_CHARGE;
-
-            double sigma =
-                sigmaMT(Eion);
-
-            double nu =
-                Ngas * sigma * std::abs(v);
-
-            v += (a - nu * v) * dt;
-
-            if (v < 0)
-                v = 0;
-
+            v += (aE - nuM * v) * dt;
+            v = std::max(v, 0.0);
             x -= v * dt;
+            t0 += dt;
 
             if (!std::isfinite(x) || !std::isfinite(v))
             {
@@ -303,160 +492,124 @@ TransportResult transportSpecies(
                 break;
             }
 
-            // charge exchange
-            if (cxCount == 0)
+            if (bulk.enableChargeExchange && x >= 0.3 * dNow && cxCount < 1)
             {
-                double sigCX =
-                    sigmaCX(Eion);
+                const double sigCx = bulk.chargeExchangeScale * sigmaCX(Eion);
+                const double lambda = 1.0 / std::max(Ngas * sigCx, 1e-24);
+                const double probability = 1.0 - std::exp(-std::max(v, 0.0) * dt / lambda);
 
-                double lambda =
-                    1.0 / (Ngas * sigCX);
-
-                double P =
-                    1.0 - exp(
-                        -std::abs(v) * dt / lambda);
-
-                if (phaseDist(rng) < P)
+                if (phaseDist(rng) < probability)
                 {
-                    double vth =
-                        sqrt(
-                            8 * K_B * 373 /
-                            (PI * mass));
-
                     v = 0.5 * v + 0.5 * vth;
-
-                    cxCount++;
+                    ++cxCount;
                 }
             }
         }
 
-        double Ef =
-            0.5 * mass * v * v / E_CHARGE;
-
-        result.energies.push_back(Ef);
+        if (x <= 0.0)
+            result.energies.push_back(0.5 * mass * v * v / E_CHARGE);
     }
+
     return result;
 }
 
-
-std::vector<ParticleTypeData>
-generateParticles(
-    BulkModel& bulk,
-    Sheath& sheath)
+std::vector<ParticleTypeData> generateParticles(BulkModel& bulk, Sheath& sheath)
 {
     std::vector<ParticleTypeData> particles;
 
-    for (auto& sp : Species)
+    double totalIonDensity = 0.0;
+    for (const auto& sp : Species)
+    {
+        if (sp.second.charge > 0)
+            totalIonDensity += std::max(getDensity(bulk, sp.first), 0.0);
+    }
+
+    for (const auto& sp : Species)
     {
         const std::string& name = sp.first;
         const SpeciesProperties& prop = sp.second;
 
-        // only positive ions
         if (prop.charge <= 0)
             continue;
 
-        // species absent
-        if (bulk.densities[name] <= 0.0)
+        const double ni = std::max(getDensity(bulk, name), 0.0);
+        if (ni <= 0.0 || totalIonDensity <= 0.0)
             continue;
 
+        const int particleCount = std::max(
+            1,
+            static_cast<int>(bulk.ionCount * (ni / totalIonDensity)));
+
+        TransportResult tr = transportSpecies(
+            bulk,
+            sheath,
+            prop.mass * AMU,
+            bulk.Ngas,
+            ni,
+            particleCount);
+
         ParticleTypeData p;
-
-        // Monte-Carlo transport
-        constexpr double densityPerMacroParticle = 1e18;
-        constexpr int maxMacroParticlesPerSpecies = 100000;
-        
-        const double scaledParticleCount = std::clamp(
-            bulk.densities[name] / densityPerMacroParticle,
-            1.0,
-            static_cast<double>(maxMacroParticlesPerSpecies));
-
-        const int particleCount =
-            static_cast<int>(scaledParticleCount);
-
-        TransportResult tr =
-            transportSpecies(
-                bulk,
-                sheath,
-                prop.mass * AMU,
-                bulk.Ngas,
-                particleCount);
-        
-        
-        // Build IEDF
-        buildIEDF(
-            tr,
-            p.iedf, 200);
-
         p.name = name;
-        
-        // Number of particles to launch
         p.count = particleCount;
-
-        // Beam spread
         p.halfAngle = 20.0f;
-
-        // Launch interval
         p.interval = 10;
 
-        particles.push_back(
-            std::move(p));
+        buildIEDF(tr, p.iedf, 200);
+        if (!p.iedf.energyCenters.empty())
+            p.energy = p.iedf.energyCenters[
+                std::distance(
+                    p.iedf.pdf.begin(),
+                    std::max_element(p.iedf.pdf.begin(), p.iedf.pdf.end()))];
+
+        particles.push_back(std::move(p));
     }
 
     return particles;
 }
 
-void buildIEDF(
-    const TransportResult& result,
-    EnergyDistribution& dist, 
-    int bins = 200)
+void buildIEDF(const TransportResult& result, EnergyDistribution& dist, int bins)
 {
     dist.energyCenters.clear();
     dist.pdf.clear();
 
-    if (result.energies.empty())
+    if (result.energies.empty() || bins < 2)
         return;
 
-    // Find maximum energy
-    double Emax =
-        *std::max_element(
-            result.energies.begin(),
-            result.energies.end());
-    
-    Emax = std::max(Emax, 1.0);
+    const double maxEnergy = *std::max_element(result.energies.begin(), result.energies.end());
+    const double eMax = std::max(300.0, 1.5 * maxEnergy);
+    const int centerCount = bins - 1;
+    const double binWidth = eMax / centerCount;
 
-    // Allocate
-    dist.energyCenters.resize(bins);
-    dist.pdf.assign(bins, 0.0f);
-
-    double dE = Emax / bins;
-
-    // Histogram
-    for (double E : result.energies)
+    std::vector<double> hist(centerCount, 0.0);
+    for (double energy : result.energies)
     {
-        int idx = static_cast<int>(E / dE);
-
-        idx = std::clamp(idx, 0, bins - 1);
-
-        dist.pdf[idx] += 1.0f;
-
-    }
-    // Normalize PDF
-    float sum = 0.0f;
-
-    for (float p : dist.pdf)
-        sum += p;
-
-    if (sum > 0.0f)
-    {
-        for (float& p : dist.pdf)
-            p /= sum;
+        int idx = static_cast<int>(energy / binWidth);
+        idx = std::clamp(idx, 0, centerCount - 1);
+        hist[idx] += 1.0;
     }
 
-    // Bin centers
-    for (int i = 0; i < bins; i++)
+    double sum = std::accumulate(hist.begin(), hist.end(), 0.0);
+    for (double& v : hist)
+        v /= (sum * binWidth + 1e-30);
+
+    hist = smoothGaussian(hist, 1.5);
+
+    for (int i = 0; i < centerCount; ++i)
     {
-        dist.energyCenters[i] =
-            static_cast<float>((i + 0.5) * dE);
+        const double center = (i + 0.5) * binWidth;
+        if (center < 50.0)
+            hist[i] *= std::pow(center / 50.0, 0.8);
     }
 
+    sum = std::accumulate(hist.begin(), hist.end(), 0.0);
+    for (double& v : hist)
+        v = (result.flux / AVOGADRO) * (v / (sum * binWidth + 1e-30));
+
+    dist.energyCenters.resize(centerCount);
+    dist.pdf.resize(centerCount);
+    for (int i = 0; i < centerCount; ++i)
+    {
+        dist.energyCenters[i] = static_cast<float>((i + 0.5) * binWidth);
+        dist.pdf[i] = static_cast<float>(hist[i]);
+    }
 }
