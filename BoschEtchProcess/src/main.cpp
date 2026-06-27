@@ -683,7 +683,9 @@ void renderMesh(Simulation& simulation) {
             spraySpeciesNames.push_back(species.first);
     }
     std::sort(spraySpeciesNames.begin(), spraySpeciesNames.end());
+    
     int selectedSpraySpecies = 0;
+    int selectedIEDF = 0;
 
     bool forceMeshBuild = true;
     float lastBuildYaw = yaw;
@@ -770,9 +772,9 @@ void renderMesh(Simulation& simulation) {
 
         ImGui::Separator();
         ImGui::Text("Electron Temp: %.3f eV", bulk.Te0);
+        ImGui::Text("Neutral Gas Density: %.3e m^-3", bulk.Ngas);
         ImGui::InputDouble("Absorbed Power (W)", &bulk.Pabs, 1.0, 10.0, "%.3f");
         ImGui::InputDouble("Pump Rate", &bulk.pump, 0.1, 1.0, "%.3f");
-        ImGui::Text("Neutral Gas Density: %.3e m^-3", bulk.Ngas);
         ImGui::InputDouble("Time Step", &bulk.dt, 1e-10, 1e-9, "%.3e");
         ImGui::InputDouble("Model Duration", &bulk.duration, 1e-5, 1e-4, "%.3e");
         ImGui::InputDouble("Bias Power (W)", &bulk.biasPower, 1.0, 10.0, "%.3f");
@@ -939,6 +941,7 @@ void renderMesh(Simulation& simulation) {
             ImGui::TableSetupColumn("Angle");
             ImGui::TableSetupColumn("Deposit");
             ImGui::TableSetupColumn("Remove");
+
             ImGui::TableHeadersRow();
 
             int removeParticle = -1;
@@ -1593,6 +1596,56 @@ void renderMesh(Simulation& simulation) {
             
         }
         ImGui::End();
+        if (!particleDataTypes.empty() && ImPlot::BeginPlot("Histogram")) {
+
+            selectedIEDF = std::clamp(
+                selectedIEDF,
+                0,
+                static_cast<int>(particleDataTypes.size()) - 1
+            );
+
+            if (ImGui::BeginCombo(
+                "Select Species",
+                particleDataTypes[selectedIEDF].name.c_str()))
+            {
+                for (int i = 0; i < static_cast<int>(particleDataTypes.size()); ++i) {
+
+                    bool isSelected = (selectedIEDF == i);
+
+                    if (ImGui::Selectable(
+                        particleDataTypes[i].name.c_str(),
+                        isSelected))
+                    {
+                        selectedIEDF = i;
+                    }
+
+                    if (isSelected)
+                        ImGui::SetItemDefaultFocus();
+                }
+
+                ImGui::EndCombo();
+            }
+
+            const auto& x = particleDataTypes[selectedIEDF].iedf.energyCenters;
+            const auto& y = particleDataTypes[selectedIEDF].iedf.pdf;
+
+            double width = x.size() > 1 ? (x[1] - x[0]) : 1.0;
+            ImPlot::SetupAxes(
+                "Energy (eV)",
+                "Ion Flux (mol m^{-2} s^{-1} eV^{-1})"
+            );
+
+            ImPlot::PlotBars(
+                "IEDF",
+                x.data(),
+                y.data(),
+                static_cast<int>(x.size()),
+                width
+            );
+
+            ImPlot::EndPlot();
+        }
+
         ImGui::Begin("Graph");
         if (previewWidth && previewHeight && ImPlot::BeginPlot("Slice"))
         {
