@@ -245,19 +245,6 @@ namespace Mathf {
     }
 }
 
-struct Vec3 {
-    float x, y, z;
-
-    Vec3 operator+(const Vec3& v) const { return { x + v.x,y + v.y,z + v.z }; }
-    Vec3 operator-(const Vec3& v) const { return { x - v.x,y - v.y,z - v.z }; }
-    Vec3 operator*(float s) const { return { x * s,y * s,z * s }; }
-};
-
-Vec3 normalize(Vec3 v)
-{
-    float l = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-    return { v.x / l,v.y / l,v.z / l };
-};
 
 using Clock = std::chrono::high_resolution_clock;
 using ms = std::chrono::duration<double, std::milli>;
@@ -340,6 +327,9 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
     if (D > 20.0f) D = 20.0f;
 }
 
+
+
+
 void renderMesh(Simulation& simulation) {
 
     if (!glfwInit()) return;
@@ -396,6 +386,8 @@ void renderMesh(Simulation& simulation) {
 
     int frame = 0;
     double tickTime = 0;
+
+    Page currentPage = Page::RenderPage;
 
     bool pause = 1;
     bool draw = 1;
@@ -752,175 +744,259 @@ void renderMesh(Simulation& simulation) {
 
 
 
-        ImGui::Begin("Plasma Model");
-        ImGui::SliderInt("Duration", &duration, 0, 50000);
-        ImGui::Checkbox("Pause", &pause);
-        ImGui::Checkbox("Draw", &draw);
 
-        if (ImGui::Button("Reset"))
+        if (ImGui::BeginMainMenuBar())
         {
-            frame = 0;
-            tickTime = 0;
+            if (ImGui::BeginMenu("Pages"))
+            {
+                if (ImGui::MenuItem("Render Page"))
+                    currentPage = Page::RenderPage;
 
-            simulation.uploadVoxels(v);
+                if (ImGui::MenuItem("Plasma Model"))
+                    currentPage = Page::PlasmaModel;
 
-            mesh.initGPU();
-            mesh.setVoxelBuffer(simulation.voxelSSBO);
-            mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
-            forceMeshBuild = false;
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMainMenuBar();
         }
 
-        ImGui::Separator();
-        ImGui::Text("Electron Temp: %.3f eV", bulk.Te0);
-        ImGui::Text("Neutral Gas Density: %.3e m^-3", bulk.Ngas);
-        ImGui::InputDouble("Absorbed Power (W)", &bulk.Pabs, 1.0, 10.0, "%.3f");
-        ImGui::InputDouble("Pump Rate", &bulk.pump, 0.1, 1.0, "%.3f");
-        ImGui::InputDouble("Time Step", &bulk.dt, 1e-10, 1e-9, "%.3e");
-        ImGui::InputDouble("Model Duration", &bulk.duration, 1e-5, 1e-4, "%.3e");
-        ImGui::InputDouble("Bias Power (W)", &bulk.biasPower, 1.0, 10.0, "%.3f");
-        ImGui::InputDouble("Bias Frequency (Hz)", &bulk.biasFrequency, 1e5, 1e6, "%.3e");
-        ImGui::InputDouble("Bias Voltage Guess (V)", &bulk.biasVoltageGuess, 1.0, 10.0, "%.3f");
-        ImGui::InputInt("Sheath Points", &bulk.sheathPoints);
-        ImGui::InputInt("Sheath Iterations", &bulk.sheathIterations);
-        ImGui::InputInt("Transport Ions", &bulk.ionCount);
-        ImGui::InputDouble("Ion Time Step", &bulk.ionDt, 1e-10, 1e-9, "%.3e");
-        ImGui::InputInt("Max RF Cycles", &bulk.maxCycles);
-        ImGui::Checkbox("Momentum Transfer", &bulk.enableMomentumTransfer);
-        ImGui::Checkbox("Charge Exchange", &bulk.enableChargeExchange);
-        ImGui::InputDouble("MT Scale", &bulk.momentumTransferScale, 0.1, 1.0, "%.3f");
-        ImGui::InputDouble("CX Scale", &bulk.chargeExchangeScale, 0.01, 0.1, "%.3f");
 
-        if (ImGui::Button("Run Plasma Model"))
-        {
-            const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
-            const std::vector<float> oldGrid = gridData;
 
-            advanceModelForDuration(bulk);
-            initializeSheath(bulk, sheath);
-            particleDataTypes = generateParticles(bulk, sheath);
+        glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            for (const ParticleTypeData& oldParticle : oldParticles)
+
+
+        if (currentPage == Page::PlasmaModel) {
+            ImGui::Begin("Plasma Model");
+
+            ImGui::Separator();
+            ImGui::Text("Electron Temp: %.3f eV", bulk.Te0);
+            ImGui::Text("Neutral Gas Density: %.3e m^-3", bulk.Ngas);
+            ImGui::InputDouble("Absorbed Power (W)", &bulk.Pabs, 1.0, 10.0, "%.3f");
+            ImGui::InputDouble("Pump Rate", &bulk.pump, 0.1, 1.0, "%.3f");
+            ImGui::InputDouble("Time Step", &bulk.dt, 1e-10, 1e-9, "%.3e");
+            ImGui::InputDouble("Model Duration", &bulk.duration, 1e-5, 1e-4, "%.3e");
+            ImGui::InputDouble("Bias Power (W)", &bulk.biasPower, 1.0, 10.0, "%.3f");
+            ImGui::InputDouble("Bias Frequency (Hz)", &bulk.biasFrequency, 1e5, 1e6, "%.3e");
+            ImGui::InputDouble("Bias Voltage Guess (V)", &bulk.biasVoltageGuess, 1.0, 10.0, "%.3f");
+            ImGui::InputInt("Sheath Points", &bulk.sheathPoints);
+            ImGui::InputInt("Sheath Iterations", &bulk.sheathIterations);
+            ImGui::InputInt("Transport Ions", &bulk.ionCount);
+            ImGui::InputDouble("Ion Time Step", &bulk.ionDt, 1e-10, 1e-9, "%.3e");
+            ImGui::InputInt("Max RF Cycles", &bulk.maxCycles);
+            ImGui::Checkbox("Momentum Transfer", &bulk.enableMomentumTransfer);
+            ImGui::Checkbox("Charge Exchange", &bulk.enableChargeExchange);
+            ImGui::InputDouble("MT Scale", &bulk.momentumTransferScale, 0.1, 1.0, "%.3f");
+            ImGui::InputDouble("CX Scale", &bulk.chargeExchangeScale, 0.01, 0.1, "%.3f");
+
+            if (ImGui::Button("Run Plasma Model"))
             {
-                bool alreadyFireable = false;
-                for (const ParticleTypeData& particle : particleDataTypes)
+                const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
+                const std::vector<float> oldGrid = gridData;
+
+                advanceModelForDuration(bulk);
+                initializeSheath(bulk, sheath);
+                particleDataTypes = generateParticles(bulk, sheath);
+
+                for (const ParticleTypeData& oldParticle : oldParticles)
                 {
-                    if (particle.name == oldParticle.name)
+                    bool alreadyFireable = false;
+                    for (const ParticleTypeData& particle : particleDataTypes)
                     {
-                        alreadyFireable = true;
-                        break;
+                        if (particle.name == oldParticle.name)
+                        {
+                            alreadyFireable = true;
+                            break;
+                        }
                     }
+
+                    if (!alreadyFireable)
+                        particleDataTypes.push_back(oldParticle);
                 }
 
-                if (!alreadyFireable)
-                    particleDataTypes.push_back(oldParticle);
+                typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+                rebuildProbabilityGrid(
+                    oldParticles,
+                    oldGrid,
+                    particleDataTypes,
+                    typesOfVoxels,
+                    gridData);
+                frame = 0;
+                tickTime = 0;
             }
 
-            typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
-            rebuildProbabilityGrid(
-                oldParticles,
-                oldGrid,
-                particleDataTypes,
-                typesOfVoxels,
-                gridData);
-            frame = 0;
-            tickTime = 0;
-        }
-
-        if (!sheath.voltageWaveform.empty() && !sheath.thicknessWaveform.empty())
-        {
-            const auto voltageRange = std::minmax_element(
-                sheath.voltageWaveform.begin(),
-                sheath.voltageWaveform.end());
-            const auto thicknessRange = std::minmax_element(
-                sheath.thicknessWaveform.begin(),
-                sheath.thicknessWaveform.end());
-            ImGui::Text(
-                "Sheath Voltage: %.3f to %.3f V",
-                *voltageRange.first,
-                *voltageRange.second);
-            ImGui::Text(
-                "Sheath Thickness: %.3e to %.3e m",
-                *thicknessRange.first,
-                *thicknessRange.second);
-        }
-        else
-        {
-            ImGui::Text("Sheath Voltage: %.3f V", sheath.voltage);
-            ImGui::Text("Sheath Thickness: %.3e m", sheath.thickness);
-        }
-        ImGui::Text("Generated Ion Species: %d", static_cast<int>(particleDataTypes.size()));
-
-        if (ImGui::BeginTable("GeneratedIons", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
-        {
-            ImGui::TableSetupColumn("Particle");
-            ImGui::TableSetupColumn("Density");
-            ImGui::TableSetupColumn("Particles");
-            ImGui::TableSetupColumn("Bins");
-            ImGui::TableHeadersRow();
-
-            for (const ParticleTypeData& particle : particleDataTypes)
+            if (!sheath.voltageWaveform.empty() && !sheath.thicknessWaveform.empty())
             {
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%s", particle.name.c_str());
-                ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%.3e", bulk.densities[particle.name]);
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%d", particle.count);
-                ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%d", static_cast<int>(particle.iedf.pdf.size()));
+                const auto voltageRange = std::minmax_element(
+                    sheath.voltageWaveform.begin(),
+                    sheath.voltageWaveform.end());
+                const auto thicknessRange = std::minmax_element(
+                    sheath.thicknessWaveform.begin(),
+                    sheath.thicknessWaveform.end());
+                ImGui::Text(
+                    "Sheath Voltage: %.3f to %.3f V",
+                    *voltageRange.first,
+                    *voltageRange.second);
+                ImGui::Text(
+                    "Sheath Thickness: %.3e to %.3e m",
+                    *thicknessRange.first,
+                    *thicknessRange.second);
             }
-
-            ImGui::EndTable();
-        }
-
-        ImGui::Separator();
-
-        if (!spraySpeciesNames.empty())
-        {
-            selectedSpraySpecies = std::clamp(
-                selectedSpraySpecies,
-                0,
-                static_cast<int>(spraySpeciesNames.size()) - 1);
-
-            if (ImGui::BeginCombo(
-                "Spray Species",
-                spraySpeciesNames[selectedSpraySpecies].c_str()))
+            else
             {
-                for (int i = 0; i < static_cast<int>(spraySpeciesNames.size()); ++i)
-                {
-                    const bool selected = i == selectedSpraySpecies;
-                    if (ImGui::Selectable(spraySpeciesNames[i].c_str(), selected))
-                        selectedSpraySpecies = i;
-                    if (selected)
-                        ImGui::SetItemDefaultFocus();
-                }
-                ImGui::EndCombo();
+                ImGui::Text("Sheath Voltage: %.3f V", sheath.voltage);
+                ImGui::Text("Sheath Thickness: %.3e m", sheath.thickness);
             }
+            ImGui::Text("Generated Ion Species: %d", static_cast<int>(particleDataTypes.size()));
 
-            if (ImGui::Button("Add Spray Particle"))
+
+
+
+            if (ImGui::BeginTable("GeneratedIons", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
             {
-                const std::string& name = spraySpeciesNames[selectedSpraySpecies];
-                bool alreadyFireable = false;
+                ImGui::TableSetupColumn("Particle");
+                ImGui::TableSetupColumn("Density");
+                ImGui::TableSetupColumn("Particles");
+                ImGui::TableSetupColumn("Bins");
+                ImGui::TableHeadersRow();
 
                 for (const ParticleTypeData& particle : particleDataTypes)
                 {
-                    if (particle.name == name)
-                    {
-                        alreadyFireable = true;
-                        break;
-                    }
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%s", particle.name.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%.3e", bulk.densities[particle.name]);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%d", particle.count);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%d", static_cast<int>(particle.iedf.pdf.size()));
                 }
 
-                if (!alreadyFireable)
+                ImGui::EndTable();
+            }
+
+            ImGui::Separator();
+
+            if (!spraySpeciesNames.empty())
+            {
+                selectedSpraySpecies = std::clamp(
+                    selectedSpraySpecies,
+                    0,
+                    static_cast<int>(spraySpeciesNames.size()) - 1);
+
+                if (ImGui::BeginCombo(
+                    "Spray Species",
+                    spraySpeciesNames[selectedSpraySpecies].c_str()))
+                {
+                    for (int i = 0; i < static_cast<int>(spraySpeciesNames.size()); ++i)
+                    {
+                        const bool selected = i == selectedSpraySpecies;
+                        if (ImGui::Selectable(spraySpeciesNames[i].c_str(), selected))
+                            selectedSpraySpecies = i;
+                        if (selected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+
+                if (ImGui::Button("Add Spray Particle"))
+                {
+                    const std::string& name = spraySpeciesNames[selectedSpraySpecies];
+                    bool alreadyFireable = false;
+
+                    for (const ParticleTypeData& particle : particleDataTypes)
+                    {
+                        if (particle.name == name)
+                        {
+                            alreadyFireable = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadyFireable)
+                    {
+                        const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
+                        const std::vector<float> oldGrid = gridData;
+                        particleDataTypes.push_back(
+                            makeSprayParticle(
+                                name,
+                                Species[name],
+                                bulk.densities[name]));
+                        typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+                        rebuildProbabilityGrid(
+                            oldParticles,
+                            oldGrid,
+                            particleDataTypes,
+                            typesOfVoxels,
+                            gridData);
+                    }
+                }
+            }
+
+            if (ImGui::BeginTable("FireableParticles", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+            {
+                ImGui::TableSetupColumn("Particle");
+                ImGui::TableSetupColumn("Charge");
+                ImGui::TableSetupColumn("Count");
+                ImGui::TableSetupColumn("Energy");
+                ImGui::TableSetupColumn("Angle");
+                ImGui::TableSetupColumn("Deposit");
+                ImGui::TableSetupColumn("Remove");
+
+                ImGui::TableHeadersRow();
+
+                int removeParticle = -1;
+                for (int i = 0; i < static_cast<int>(particleDataTypes.size()); ++i)
+                {
+                    ParticleTypeData& particle = particleDataTypes[i];
+                    ImGui::PushID(i);
+                    ImGui::TableNextRow();
+
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%s", particle.name.c_str());
+
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%d", Species[particle.name].charge);
+
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::InputInt("##count", &particle.count);
+                    if (particle.count < 1)
+                        particle.count = 1;
+
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::InputFloat("##energy", &particle.energy))
+                    {
+                        if (particle.energy < 0.01f)
+                            particle.energy = 0.01f;
+                        particle.iedf.energyCenters = { particle.energy };
+                        particle.iedf.pdf = { 1.0f };
+                    }
+
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::InputFloat("##angle", &particle.halfAngle);
+                    particle.halfAngle = std::clamp(particle.halfAngle, 0.0f, 89.0f);
+
+                    ImGui::TableSetColumnIndex(5);
+                    ImGui::Checkbox("##deposit", &particle.deposit);
+
+                    ImGui::TableSetColumnIndex(6);
+                    if (ImGui::Button("Remove"))
+                        removeParticle = i;
+
+                    ImGui::PopID();
+                }
+
+                if (removeParticle >= 0)
                 {
                     const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
                     const std::vector<float> oldGrid = gridData;
-                    particleDataTypes.push_back(
-                        makeSprayParticle(
-                            name,
-                            Species[name],
-                            bulk.densities[name]));
+                    particleDataTypes.erase(particleDataTypes.begin() + removeParticle);
                     typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
                     rebuildProbabilityGrid(
                         oldParticles,
@@ -929,771 +1005,667 @@ void renderMesh(Simulation& simulation) {
                         typesOfVoxels,
                         gridData);
                 }
-            }
-        }
-
-        if (ImGui::BeginTable("FireableParticles", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
-        {
-            ImGui::TableSetupColumn("Particle");
-            ImGui::TableSetupColumn("Charge");
-            ImGui::TableSetupColumn("Count");
-            ImGui::TableSetupColumn("Energy");
-            ImGui::TableSetupColumn("Angle");
-            ImGui::TableSetupColumn("Deposit");
-            ImGui::TableSetupColumn("Remove");
-
-            ImGui::TableHeadersRow();
-
-            int removeParticle = -1;
-            for (int i = 0; i < static_cast<int>(particleDataTypes.size()); ++i)
-            {
-                ParticleTypeData& particle = particleDataTypes[i];
-                ImGui::PushID(i);
-                ImGui::TableNextRow();
-
-                ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%s", particle.name.c_str());
-
-                ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%d", Species[particle.name].charge);
-
-                ImGui::TableSetColumnIndex(2);
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                ImGui::InputInt("##count", &particle.count);
-                if (particle.count < 1)
-                    particle.count = 1;
-
-                ImGui::TableSetColumnIndex(3);
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                if (ImGui::InputFloat("##energy", &particle.energy))
-                {
-                    if (particle.energy < 0.01f)
-                        particle.energy = 0.01f;
-                    particle.iedf.energyCenters = { particle.energy };
-                    particle.iedf.pdf = { 1.0f };
-                }
-
-                ImGui::TableSetColumnIndex(4);
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                ImGui::InputFloat("##angle", &particle.halfAngle);
-                particle.halfAngle = std::clamp(particle.halfAngle, 0.0f, 89.0f);
-
-                ImGui::TableSetColumnIndex(5);
-                ImGui::Checkbox("##deposit", &particle.deposit);
-
-                ImGui::TableSetColumnIndex(6);
-                if (ImGui::Button("Remove"))
-                    removeParticle = i;
-
-                ImGui::PopID();
-            }
-
-            if (removeParticle >= 0)
-            {
-                const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
-                const std::vector<float> oldGrid = gridData;
-                particleDataTypes.erase(particleDataTypes.begin() + removeParticle);
-                typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
-                rebuildProbabilityGrid(
-                    oldParticles,
-                    oldGrid,
-                    particleDataTypes,
-                    typesOfVoxels,
-                    gridData);
-            }
-
-            ImGui::EndTable();
-        }
-
-        if (ImGui::CollapsingHeader("Surface Probabilities", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            for (int voxel = 0; voxel < typesOfVoxels; ++voxel)
-            {
-                ImGui::PushID(voxel);
-                if (ImGui::TreeNode("Voxel Type", "Voxel Type %d", voxel))
-                {
-                    if (ImGui::BeginTable("SurfaceProbabilityTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
-                    {
-                        ImGui::TableSetupColumn("Particle");
-                        ImGui::TableSetupColumn("Reaction");
-                        ImGui::TableSetupColumn("Deposit");
-                        ImGui::TableSetupColumn("Adsorb");
-                        ImGui::TableHeadersRow();
-
-                        for (int particle = 0; particle < static_cast<int>(particleDataTypes.size()); ++particle)
-                        {
-                            ImGui::PushID(particle);
-                            ImGui::TableNextRow();
-
-                            ImGui::TableSetColumnIndex(0);
-                            ImGui::Text("%s", particleDataTypes[particle].name.c_str());
-
-                            for (int kind = 0; kind < 3; ++kind)
-                            {
-                                ImGui::TableSetColumnIndex(kind + 1);
-                                float& probability =
-                                    gridData[
-                                        probabilityIndex(
-                                            particle,
-                                            voxel,
-                                            kind,
-                                            typesOfParticles,
-                                            typesOfVoxels)];
-                                ImGui::SetNextItemWidth(-FLT_MIN);
-                                ImGui::InputFloat("##prob", &probability, 0.01f, 0.1f, "%.3f");
-                                probability = std::clamp(probability, 0.0f, 1.0f);
-                            }
-
-                            ImGui::PopID();
-                        }
-
-                        ImGui::EndTable();
-                    }
-                    ImGui::TreePop();
-                }
-                ImGui::PopID();
-            }
-        }
-
-        if (ImGui::CollapsingHeader("Species Densities"))
-        {
-            if (ImGui::BeginTable("SpeciesDensityTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
-            {
-                ImGui::TableSetupColumn("Species");
-                ImGui::TableSetupColumn("Charge");
-                ImGui::TableSetupColumn("Density");
-                ImGui::TableHeadersRow();
-
-                for (const auto& species : Species)
-                {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%s", species.first.c_str());
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%d", species.second.charge);
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%.3e", bulk.densities[species.first]);
-                }
 
                 ImGui::EndTable();
             }
-        }
 
-        ImGui::End();
-
-        
-        // ========================= VOXEL WINDOW ========================= //
-        
-        ImGui::Begin("Voxel Editor");
-
-        ImGui::Text("Voxel Settings");
-
-        ImGui::SliderInt("Voxel Type", &voxelType, 0, typesOfVoxels - 1);
-        ImGui::InputFloat("Threshold", &voxelThreshold);
-        ImGui::InputFloat("Deposit Threshold", &voxelDepositThreshold);
-        ImGui::SliderInt("Solid", &solid, 0, 1);
-
-        ImGui::Separator();
-
-        ImGui::Text("Fill Region");
-
-        ImGui::InputInt("x0", &x0);
-        ImGui::InputInt("x1", &x1);
-
-        ImGui::InputInt("y0", &y0);
-        ImGui::InputInt("y1", &y1);
-
-        ImGui::InputInt("z0", &z0);
-        ImGui::InputInt("z1", &z1);
-
-        if (ImGui::Button("Fill"))
-        {
-            Voxel voxel{};
-
-            voxel.solid = solid;
-            voxel.type = voxelType;
-            voxel.threshold = voxelThreshold;
-            voxel.depositThreshold = voxelDepositThreshold;
-
-            int safeX0 = std::clamp(std::min(x0, x1), 0, simulation.grid.X);
-            int safeX1 = std::clamp(std::max(x0, x1), 0, simulation.grid.X);
-            int safeY0 = std::clamp(std::min(y0, y1), 0, simulation.grid.Y);
-            int safeY1 = std::clamp(std::max(y0, y1), 0, simulation.grid.Y);
-            int safeZ0 = std::clamp(std::min(z0, z1), 0, simulation.grid.Z);
-            int safeZ1 = std::clamp(std::max(z0, z1), 0, simulation.grid.Z);
-
-            simulation.initRectangle(voxel, safeX0, safeY0, safeZ0, safeX1, safeY1, safeZ1);
-
-            v = simulation.grid.voxels;
-            simulation.uploadVoxels(v);
-            forceMeshBuild = true;
-        }
-
-        ImGui::End();
-        
-        // ========================= GRID FILE WINDOW ========================= //
-        
-        ImGui::Begin("Grid Save/Load");
-
-
-        ImGui::InputText("Filename", gridFilename, IM_ARRAYSIZE(gridFilename));
-        if (ImGui::Button("Save Grid"))
-        {
-            std::ofstream out(gridFilename, std::ios::binary);
-
-            if (out.is_open())
+            if (ImGui::CollapsingHeader("Surface Probabilities", ImGuiTreeNodeFlags_DefaultOpen))
             {
-                // Grid
-                size_t voxelCount = simulation.grid.voxels.size();
+                for (int voxel = 0; voxel < typesOfVoxels; ++voxel)
+                {
+                    ImGui::PushID(voxel);
+                    if (ImGui::TreeNode("Voxel Type", "Voxel Type %d", voxel))
+                    {
+                        if (ImGui::BeginTable("SurfaceProbabilityTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+                        {
+                            ImGui::TableSetupColumn("Particle");
+                            ImGui::TableSetupColumn("Reaction");
+                            ImGui::TableSetupColumn("Deposit");
+                            ImGui::TableSetupColumn("Adsorb");
+                            ImGui::TableHeadersRow();
 
-                out.write((char*)&voxelCount, sizeof(size_t));
-                out.write(
-                    (char*)simulation.grid.voxels.data(),
-                    voxelCount * sizeof(Voxel)
+                            for (int particle = 0; particle < static_cast<int>(particleDataTypes.size()); ++particle)
+                            {
+                                ImGui::PushID(particle);
+                                ImGui::TableNextRow();
+
+                                ImGui::TableSetColumnIndex(0);
+                                ImGui::Text("%s", particleDataTypes[particle].name.c_str());
+
+                                for (int kind = 0; kind < 3; ++kind)
+                                {
+                                    ImGui::TableSetColumnIndex(kind + 1);
+                                    float& probability =
+                                        gridData[
+                                            probabilityIndex(
+                                                particle,
+                                                voxel,
+                                                kind,
+                                                typesOfParticles,
+                                                typesOfVoxels)];
+                                    ImGui::SetNextItemWidth(-FLT_MIN);
+                                    ImGui::InputFloat("##prob", &probability, 0.01f, 0.1f, "%.3f");
+                                    probability = std::clamp(probability, 0.0f, 1.0f);
+                                }
+
+                                ImGui::PopID();
+                            }
+
+                            ImGui::EndTable();
+                        }
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                }
+            }
+
+            if (ImGui::CollapsingHeader("Species Densities"))
+            {
+                if (ImGui::BeginTable("SpeciesDensityTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+                {
+                    ImGui::TableSetupColumn("Species");
+                    ImGui::TableSetupColumn("Charge");
+                    ImGui::TableSetupColumn("Density");
+                    ImGui::TableHeadersRow();
+
+                    for (const auto& species : Species)
+                    {
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::Text("%s", species.first.c_str());
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::Text("%d", species.second.charge);
+                        ImGui::TableSetColumnIndex(2);
+                        ImGui::Text("%.3e", bulk.densities[species.first]);
+                    }
+
+                    ImGui::EndTable();
+                }
+            }
+
+
+            ImGui::End();
+
+
+            if (!particleDataTypes.empty() && ImPlot::BeginPlot("Histogram")) {
+
+                selectedIEDF = std::clamp(
+                    selectedIEDF,
+                    0,
+                    static_cast<int>(particleDataTypes.size()) - 1
                 );
 
-                // Settings
-                out.write((char*)&duration, sizeof(duration));
-
-                out.write((char*)&voxelType, sizeof(voxelType));
-                out.write((char*)&solid, sizeof(solid));
-
-                out.write((char*)&voxelThreshold, sizeof(voxelThreshold));
-                out.write((char*)&voxelDepositThreshold, sizeof(voxelDepositThreshold));
-
-                out.write((char*)&typesOfVoxels, sizeof(typesOfVoxels));
-                out.write((char*)&typesOfParticles, sizeof(typesOfParticles));
-
-                // Particle types
-                size_t particleCount = particleDataTypes.size();
-
-                const uint32_t serializedParticleCount =
-                    static_cast<uint32_t>(particleCount);
-
-                writeValue(out, PARTICLE_DATA_MAGIC);
-                writeValue(out, PARTICLE_DATA_VERSION);
-                writeValue(out, serializedParticleCount);
-
-                for (const ParticleTypeData& particle : particleDataTypes)
+                if (ImGui::BeginCombo(
+                    "Select Species",
+                    particleDataTypes[selectedIEDF].name.c_str()))
                 {
-                    if (!writeParticleType(out, particle))
-                        break;
+                    for (int i = 0; i < static_cast<int>(particleDataTypes.size()); ++i) {
+
+                        bool isSelected = (selectedIEDF == i);
+
+                        if (ImGui::Selectable(
+                            particleDataTypes[i].name.c_str(),
+                            isSelected))
+                        {
+                            selectedIEDF = i;
+                        }
+
+                        if (isSelected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+
+                    ImGui::EndCombo();
                 }
 
-                // Reaction / Deposit / Adsorb grid
-                size_t gridSize = gridData.size();
+                const auto& x = particleDataTypes[selectedIEDF].iedf.energyCenters;
+                const auto& y = particleDataTypes[selectedIEDF].iedf.pdf;
 
-                out.write((char*)&gridSize, sizeof(gridSize));
-
-                out.write(
-                    (char*)gridData.data(),
-                    gridSize * sizeof(float)
+                double width = x.size() > 1 ? (x[1] - x[0]) : 1.0;
+                ImPlot::SetupAxes(
+                    "Energy (eV)",
+                    "Ion Flux (mol m^{-2} s^{-1} eV^{-1})"
                 );
 
-                out.close();
+                ImPlot::PlotBars(
+                    "IEDF",
+                    x.data(),
+                    y.data(),
+                    static_cast<int>(x.size()),
+                    width
+                );
 
-                std::cout << "Saved grid + settings to: "
-                    << gridFilename << std::endl;
+                ImPlot::EndPlot();
             }
         }
-        if (ImGui::Button("Load Grid"))
-        {
-            std::ifstream in(gridFilename, std::ios::binary);
 
-            if (in.is_open())
+
+        // ========================= GRID FILE WINDOW ========================= //
+        else if(currentPage == Page::RenderPage){
+            ImGui::Begin("Grid Save/Load");
+            ImGui::SliderInt("Duration", &duration, 0, 50000);
+            ImGui::Checkbox("Pause", &pause);
+            ImGui::Checkbox("Draw", &draw);
+
+            if (ImGui::Button("Reset"))
             {
-                size_t voxelCount = 0;
+                frame = 0;
+                tickTime = 0;
 
-                in.read((char*)&voxelCount, sizeof(size_t));
+                simulation.uploadVoxels(v);
 
-                if (voxelCount == simulation.grid.voxels.size())
+                mesh.initGPU();
+                mesh.setVoxelBuffer(simulation.voxelSSBO);
+                mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+                forceMeshBuild = false;
+            }
+
+            ImGui::InputText("Filename", gridFilename, IM_ARRAYSIZE(gridFilename));
+            if (ImGui::Button("Save Grid"))
+            {
+                std::ofstream out(gridFilename, std::ios::binary);
+
+                if (out.is_open())
                 {
-                    in.read(
+                    // Grid
+                    size_t voxelCount = simulation.grid.voxels.size();
+
+                    out.write((char*)&voxelCount, sizeof(size_t));
+                    out.write(
                         (char*)simulation.grid.voxels.data(),
                         voxelCount * sizeof(Voxel)
                     );
 
                     // Settings
-                    in.read((char*)&duration, sizeof(duration));
-                    in.read((char*)&voxelType, sizeof(voxelType));
-                    in.read((char*)&solid, sizeof(solid));
+                    out.write((char*)&duration, sizeof(duration));
 
-                    in.read((char*)&voxelThreshold, sizeof(voxelThreshold));
-                    in.read((char*)&voxelDepositThreshold, sizeof(voxelDepositThreshold));
+                    out.write((char*)&voxelType, sizeof(voxelType));
+                    out.write((char*)&solid, sizeof(solid));
 
-                    in.read((char*)&typesOfVoxels, sizeof(typesOfVoxels));
-                    in.read((char*)&typesOfParticles, sizeof(typesOfParticles));
+                    out.write((char*)&voxelThreshold, sizeof(voxelThreshold));
+                    out.write((char*)&voxelDepositThreshold, sizeof(voxelDepositThreshold));
+
+                    out.write((char*)&typesOfVoxels, sizeof(typesOfVoxels));
+                    out.write((char*)&typesOfParticles, sizeof(typesOfParticles));
 
                     // Particle types
-                    uint32_t particleMagic = 0;
-                    uint32_t particleVersion = 0;
-                    uint32_t particleCount = 0;
+                    size_t particleCount = particleDataTypes.size();
 
-                    bool validParticleData =
-                        readValue(in, particleMagic) &&
-                        readValue(in, particleVersion) &&
-                        readValue(in, particleCount) &&
-                        particleMagic == PARTICLE_DATA_MAGIC &&
-                        particleVersion == PARTICLE_DATA_VERSION &&
-                        particleCount <= MAX_SERIALIZED_ITEMS;
+                    const uint32_t serializedParticleCount =
+                        static_cast<uint32_t>(particleCount);
 
-                    if (validParticleData)
+                    writeValue(out, PARTICLE_DATA_MAGIC);
+                    writeValue(out, PARTICLE_DATA_VERSION);
+                    writeValue(out, serializedParticleCount);
+
+                    for (const ParticleTypeData& particle : particleDataTypes)
                     {
-                        particleDataTypes.resize(particleCount);
-                        for (ParticleTypeData& particle : particleDataTypes)
+                        if (!writeParticleType(out, particle))
+                            break;
+                    }
+
+                    // Reaction / Deposit / Adsorb grid
+                    size_t gridSize = gridData.size();
+
+                    out.write((char*)&gridSize, sizeof(gridSize));
+
+                    out.write(
+                        (char*)gridData.data(),
+                        gridSize * sizeof(float)
+                    );
+
+                    out.close();
+
+                    std::cout << "Saved grid + settings to: "
+                        << gridFilename << std::endl;
+                }
+            }
+            if (ImGui::Button("Load Grid"))
+            {
+                std::ifstream in(gridFilename, std::ios::binary);
+
+                if (in.is_open())
+                {
+                    size_t voxelCount = 0;
+
+                    in.read((char*)&voxelCount, sizeof(size_t));
+
+                    if (voxelCount == simulation.grid.voxels.size())
+                    {
+                        in.read(
+                            (char*)simulation.grid.voxels.data(),
+                            voxelCount * sizeof(Voxel)
+                        );
+
+                        // Settings
+                        in.read((char*)&duration, sizeof(duration));
+                        in.read((char*)&voxelType, sizeof(voxelType));
+                        in.read((char*)&solid, sizeof(solid));
+
+                        in.read((char*)&voxelThreshold, sizeof(voxelThreshold));
+                        in.read((char*)&voxelDepositThreshold, sizeof(voxelDepositThreshold));
+
+                        in.read((char*)&typesOfVoxels, sizeof(typesOfVoxels));
+                        in.read((char*)&typesOfParticles, sizeof(typesOfParticles));
+
+                        // Particle types
+                        uint32_t particleMagic = 0;
+                        uint32_t particleVersion = 0;
+                        uint32_t particleCount = 0;
+
+                        bool validParticleData =
+                            readValue(in, particleMagic) &&
+                            readValue(in, particleVersion) &&
+                            readValue(in, particleCount) &&
+                            particleMagic == PARTICLE_DATA_MAGIC &&
+                            particleVersion == PARTICLE_DATA_VERSION &&
+                            particleCount <= MAX_SERIALIZED_ITEMS;
+
+                        if (validParticleData)
                         {
-                            if (!readParticleType(in, particle))
+                            particleDataTypes.resize(particleCount);
+                            for (ParticleTypeData& particle : particleDataTypes)
                             {
-                                validParticleData = false;
-                                break;
+                                if (!readParticleType(in, particle))
+                                {
+                                    validParticleData = false;
+                                    break;
+                                }
                             }
                         }
-                    }
 
-                    size_t gridSize = 0;
-                    if (validParticleData)
-                    {
-                        in.read((char*)&gridSize, sizeof(gridSize));
-                        validParticleData =
-                            static_cast<bool>(in) &&
-                            gridSize <= MAX_SERIALIZED_ITEMS;
-                    }
+                        size_t gridSize = 0;
+                        if (validParticleData)
+                        {
+                            in.read((char*)&gridSize, sizeof(gridSize));
+                            validParticleData =
+                                static_cast<bool>(in) &&
+                                gridSize <= MAX_SERIALIZED_ITEMS;
+                        }
 
-                    if (validParticleData)
-                    {
-                        gridData.resize(gridSize);
-                        in.read(
-                            (char*)gridData.data(),
-                            gridSize * sizeof(float)
-                        );
-                        validParticleData = static_cast<bool>(in);
-                    }
+                        if (validParticleData)
+                        {
+                            gridData.resize(gridSize);
+                            in.read(
+                                (char*)gridData.data(),
+                                gridSize * sizeof(float)
+                            );
+                            validParticleData = static_cast<bool>(in);
+                        }
 
-                    if (!validParticleData)
-                    {
-                        std::cout
-                            << "Grid file uses an unsupported or corrupt "
-                               "particle-data format.\n";
-                        in.close();
+                        if (!validParticleData)
+                        {
+                            std::cout
+                                << "Grid file uses an unsupported or corrupt "
+                                "particle-data format.\n";
+                            in.close();
+                        }
+                        else
+                        {
+                            in.close();
+
+                            simulation.uploadVoxels(
+                                simulation.grid.voxels
+                            );
+
+                            mesh.initGPU();
+                            mesh.setVoxelBuffer(simulation.voxelSSBO);
+                            mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+                            forceMeshBuild = false;
+
+                            std::cout << "Loaded grid + settings from: "
+                                << gridFilename << std::endl;
+                        }
                     }
                     else
                     {
+                        std::cout << "Voxel count mismatch.\n";
                         in.close();
-
-                        simulation.uploadVoxels(
-                            simulation.grid.voxels
-                        );
-
-                        mesh.initGPU();
-                        mesh.setVoxelBuffer(simulation.voxelSSBO);
-                        mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
-                        forceMeshBuild = false;
-
-                        std::cout << "Loaded grid + settings from: "
-                            << gridFilename << std::endl;
                     }
                 }
-                else
-                {
-                    std::cout << "Voxel count mismatch.\n";
-                    in.close();
-                }
             }
-        }
 
-        ImGui::Separator();
-        
-        ImGui::InputText(
-            "DLL File",
-            dllFile,
-            sizeof(dllFile)
-        );
+            ImGui::Separator();
 
-        if (ImGui::Button("Load Simulation"))
-        {
-            try
+            ImGui::InputText(
+                "DLL File",
+                dllFile,
+                sizeof(dllFile)
+            );
+
+            if (ImGui::Button("Load Simulation"))
             {
-                // unload previous dll
-                if (simulationDLL)
+                try
                 {
-                    FreeLibrary(simulationDLL);
-                    simulationDLL = nullptr;
-                }
-
-                simulationDLL = LoadLibraryA(dllFile);
-
-                if (!simulationDLL)
-                {
-                    std::cout
-                        << "Failed to load DLL: "
-                        << dllFile
-                        << std::endl;
-                }
-                else
-                {
-                    using CreateSimulationFn =
-                        Simulation(*)();
-
-                    CreateSimulationFn createSimulation =
-                        (CreateSimulationFn)
-                        GetProcAddress(
-                            simulationDLL,
-                            "CreateSimulation"
-                        );
-
-                    if (!createSimulation)
+                    // unload previous dll
+                    if (simulationDLL)
                     {
-                        std::cout
-                            << "CreateSimulation not found"
-                            << std::endl;
-
                         FreeLibrary(simulationDLL);
                         simulationDLL = nullptr;
                     }
-                    else
+
+                    simulationDLL = LoadLibraryA(dllFile);
+
+                    if (!simulationDLL)
                     {
-                        simulation = createSimulation();
-
-                        simulation.createBuffers();
-
-                        simulation.uploadVoxels(
-                            simulation.grid.voxels
-                        );
-
-                        mesh.initGPU();
-
-                        mesh.setVoxelBuffer(
-                            simulation.voxelSSBO
-                        );
-
-                        mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
-
                         std::cout
-                            << "Simulation loaded from "
+                            << "Failed to load DLL: "
                             << dllFile
                             << std::endl;
                     }
-                }
-            }
-            catch (...)
-            {
-                std::cout
-                    << "Exception while loading simulation"
-                    << std::endl;
-            }
-        }
-
-        if (simulationDLL)
-        {
-            ImGui::TextColored(
-                ImVec4(0, 1, 0, 1),
-                "DLL Loaded"
-            );
-        }
-        else
-        {
-            ImGui::TextColored(
-                ImVec4(1, 0, 0, 1),
-                "No DLL Loaded"
-            );
-        }
-
-
-        ImGui::End();
-        glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-
-        static auto previousTime = Clock::now();
-
-        static double accumulator = 0.0;
-
-        const double fixedDelta = 1.0 / 240.0;
-
-        auto currentTime = Clock::now();
-
-        double deltaTime =
-            std::chrono::duration<double>(
-                currentTime - previousTime
-            ).count();
-
-        previousTime = currentTime;
-
-        accumulator += deltaTime;
-
-        while (accumulator >= fixedDelta)
-        {
-            if (!pause)
-            {
-                auto t1 = Clock::now();
-                if (frame <= duration)
-                {
-                    for (int i = 0;i < particleDataTypes.size();i++)
+                    else
                     {
-                        ParticleTypeData p = particleDataTypes[i];
-                        // Upload particles
+                        using CreateSimulationFn =
+                            Simulation(*)();
 
-                        simulation.uploadParticles(
-                            p,
-                            i);
+                        CreateSimulationFn createSimulation =
+                            (CreateSimulationFn)
+                            GetProcAddress(
+                                simulationDLL,
+                                "CreateSimulation"
+                            );
 
-                    }
-                }
-
-                simulation.tick(
-                    gridData,
-                    typesOfVoxels,
-                    typesOfParticles
-                );
-
-                frame++;
-
-                auto t2 = Clock::now();
-
-                tickTime += ms(t2 - t1).count();
-            }
-
-            accumulator -= fixedDelta;
-        }
-        if (draw) {
-            const bool cameraChanged =
-                std::abs(yaw - lastBuildYaw) > 0.0001f ||
-                std::abs(pitch - lastBuildPitch) > 0.0001f ||
-                std::abs(D - lastBuildDistance) > 0.0001f;
-
-            if (forceMeshBuild || cameraChanged || (!pause && frame % 10 == 0)) {
-                mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
-                lastBuildYaw = yaw;
-                lastBuildPitch = pitch;
-                lastBuildDistance = D;
-                forceMeshBuild = false;
-            }
-            mesh.draw();
-        }
-        ImGui::Begin("Information");
-
-        ImGui::Separator();
-
-        ImGui::Text("Simulation");
-
-        ImGui::Text("Total Voxels: %d", mesh.voxelCount);
-        ImGui::Text("Axes:");
-
-        ImGui::TextColored(ImVec4(1, 0, 0, 1), "X Axis");
-        ImGui::TextColored(ImVec4(0, 0, 1, 1), "Y Axis");
-        ImGui::TextColored(ImVec4(1, 1, 0, 1), "Z Axis");
-
-
-        ImGui::End();
-
-
-        if (ImGui::Begin("Slice Export"))
-        {
-            ImGui::InputText("File", fileName2, sizeof(fileName2));
-
-            ImGui::Combo(
-                "Direction",
-                &sliceDir,
-                "XY\0XZ\0YZ\0"
-            );
-
-            ImGui::InputInt("Slice Index", &sliceIndex);
-
-            if (ImGui::Button("Extract Slice"))
-            {
-                std::vector<int> slice =
-                    mesh.extractSlice(sliceDir, sliceIndex);
-
-                switch (sliceDir)
-                {
-                case 0: // XY
-                    previewWidth = Settings::X;
-                    previewHeight = Settings::Y;
-                    break;
-
-                case 1: // XZ
-                    previewWidth = Settings::X;
-                    previewHeight = Settings::Z;
-                    break;
-
-                default: // YZ
-                    previewWidth = Settings::Y;
-                    previewHeight = Settings::Z;
-                    break;
-                }
-
-                std::vector<uint32_t> pixels(
-                    previewWidth * previewHeight
-                );
-
-                for (int i = 0; i < pixels.size(); i++)
-                {
-                    switch (slice[i])
-                    {
-                    case -1:
-                        pixels[i] = 0xFF000000;
-                        break;
-
-                    case 0:
-                        pixels[i] = 0xFFFFFFFF;
-                        break;
-
-                    case 1:
-                        pixels[i] = 0xFFFF0000;
-                        break;
-
-                    case 2:
-                        pixels[i] = 0xFF00FF00;
-                        break;
-
-                    default:
-                        pixels[i] = 0xFF0000FF;
-                        break;
-                    }
-                }
-
-                // Update texture
-                glBindTexture(GL_TEXTURE_2D, sliceTexture);
-
-                glTexImage2D(
-                    GL_TEXTURE_2D,
-                    0,
-                    GL_RGBA8,
-                    previewWidth,
-                    previewHeight,
-                    0,
-                    GL_RGBA,
-                    GL_UNSIGNED_BYTE,
-                    pixels.data()
-                );
-
-                // Save slice to file
-                std::ofstream out(fileName2);
-
-                if (out)
-                {
-                    out << previewWidth
-                        << " "
-                        << previewHeight
-                        << "\n";
-
-                    for (int y = 0; y < previewHeight; y++)
-                    {
-                        for (int x = 0; x < previewWidth; x++)
+                        if (!createSimulation)
                         {
-                            out << slice[x + y * previewWidth];
+                            std::cout
+                                << "CreateSimulation not found"
+                                << std::endl;
 
-                            if (x != previewWidth - 1)
-                                out << ' ';
+                            FreeLibrary(simulationDLL);
+                            simulationDLL = nullptr;
+                        }
+                        else
+                        {
+                            simulation = createSimulation();
+
+                            simulation.createBuffers();
+
+                            simulation.uploadVoxels(
+                                simulation.grid.voxels
+                            );
+
+                            mesh.initGPU();
+
+                            mesh.setVoxelBuffer(
+                                simulation.voxelSSBO
+                            );
+
+                            mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+
+                            std::cout
+                                << "Simulation loaded from "
+                                << dllFile
+                                << std::endl;
+                        }
+                    }
+                }
+                catch (...)
+                {
+                    std::cout
+                        << "Exception while loading simulation"
+                        << std::endl;
+                }
+            }
+
+            if (simulationDLL)
+            {
+                ImGui::TextColored(
+                    ImVec4(0, 1, 0, 1),
+                    "DLL Loaded"
+                );
+            }
+            else
+            {
+                ImGui::TextColored(
+                    ImVec4(1, 0, 0, 1),
+                    "No DLL Loaded"
+                );
+            }
+
+
+            ImGui::End();
+            
+            static auto previousTime = Clock::now();
+
+            static double accumulator = 0.0;
+
+            const double fixedDelta = 1.0 / 240.0;
+
+            auto currentTime = Clock::now();
+
+            double deltaTime =
+                std::chrono::duration<double>(
+                    currentTime - previousTime
+                ).count();
+
+            previousTime = currentTime;
+
+            accumulator += deltaTime;
+
+            while (accumulator >= fixedDelta)
+            {
+                if (!pause)
+                {
+                    auto t1 = Clock::now();
+                    if (frame <= duration)
+                    {
+                        for (int i = 0;i < particleDataTypes.size();i++)
+                        {
+                            ParticleTypeData p = particleDataTypes[i];
+                            // Upload particles
+
+                            simulation.uploadParticles(
+                                p,
+                                i);
+
+                        }
+                    }
+
+                    simulation.tick(
+                        gridData,
+                        typesOfVoxels,
+                        typesOfParticles
+                    );
+
+                    frame++;
+
+                    auto t2 = Clock::now();
+
+                    tickTime += ms(t2 - t1).count();
+                }
+
+                accumulator -= fixedDelta;
+            }
+            if (draw) {
+                const bool cameraChanged =
+                    std::abs(yaw - lastBuildYaw) > 0.0001f ||
+                    std::abs(pitch - lastBuildPitch) > 0.0001f ||
+                    std::abs(D - lastBuildDistance) > 0.0001f;
+
+                if (forceMeshBuild || cameraChanged || (!pause && frame % 10 == 0)) {
+                    mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+                    lastBuildYaw = yaw;
+                    lastBuildPitch = pitch;
+                    lastBuildDistance = D;
+                    forceMeshBuild = false;
+                }
+                mesh.draw();
+            }
+        
+            ImGui::Begin("Information");
+
+            ImGui::Separator();
+
+            ImGui::Text("Simulation");
+
+            ImGui::Text("Axes:");
+
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "X Axis");
+            ImGui::TextColored(ImVec4(0, 0, 1, 1), "Y Axis");
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "Z Axis");
+
+
+            ImGui::End();
+
+
+            if (ImGui::Begin("Slice Export"))
+            {
+                ImGui::InputText("File", fileName2, sizeof(fileName2));
+
+                ImGui::Combo(
+                    "Direction",
+                    &sliceDir,
+                    "XY\0XZ\0YZ\0"
+                );
+
+                ImGui::InputInt("Slice Index", &sliceIndex);
+
+                if (ImGui::Button("Extract Slice"))
+                {
+                    std::vector<int> slice =
+                        mesh.extractSlice(sliceDir, sliceIndex);
+
+                    switch (sliceDir)
+                    {
+                    case 0: // XY
+                        previewWidth = Settings::X;
+                        previewHeight = Settings::Y;
+                        break;
+
+                    case 1: // XZ
+                        previewWidth = Settings::X;
+                        previewHeight = Settings::Z;
+                        break;
+
+                    default: // YZ
+                        previewWidth = Settings::Y;
+                        previewHeight = Settings::Z;
+                        break;
+                    }
+
+                    std::vector<uint32_t> pixels(
+                        previewWidth * previewHeight
+                    );
+
+                    for (int i = 0; i < pixels.size(); i++)
+                    {
+                        switch (slice[i])
+                        {
+                        case -1:
+                            pixels[i] = 0xFF000000;
+                            break;
+
+                        case 0:
+                            pixels[i] = 0xFFFFFFFF;
+                            break;
+
+                        case 1:
+                            pixels[i] = 0xFFFF0000;
+                            break;
+
+                        case 2:
+                            pixels[i] = 0xFF00FF00;
+                            break;
+
+                        default:
+                            pixels[i] = 0xFF0000FF;
+                            break;
+                        }
+                    }
+
+                    // Update texture
+                    glBindTexture(GL_TEXTURE_2D, sliceTexture);
+
+                    glTexImage2D(
+                        GL_TEXTURE_2D,
+                        0,
+                        GL_RGBA8,
+                        previewWidth,
+                        previewHeight,
+                        0,
+                        GL_RGBA,
+                        GL_UNSIGNED_BYTE,
+                        pixels.data()
+                    );
+
+                    // Save slice to file
+                    std::ofstream out(fileName2);
+
+                    if (out)
+                    {
+                        out << previewWidth
+                            << " "
+                            << previewHeight
+                            << "\n";
+
+                        for (int y = 0; y < previewHeight; y++)
+                        {
+                            for (int x = 0; x < previewWidth; x++)
+                            {
+                                out << slice[x + y * previewWidth];
+
+                                if (x != previewWidth - 1)
+                                    out << ' ';
+                            }
+
+                            out << '\n';
                         }
 
-                        out << '\n';
+                        out.close();
                     }
-
-                    out.close();
-                }
-            }
-            
-        }
-        ImGui::End();
-        if (!particleDataTypes.empty() && ImPlot::BeginPlot("Histogram")) {
-
-            selectedIEDF = std::clamp(
-                selectedIEDF,
-                0,
-                static_cast<int>(particleDataTypes.size()) - 1
-            );
-
-            if (ImGui::BeginCombo(
-                "Select Species",
-                particleDataTypes[selectedIEDF].name.c_str()))
-            {
-                for (int i = 0; i < static_cast<int>(particleDataTypes.size()); ++i) {
-
-                    bool isSelected = (selectedIEDF == i);
-
-                    if (ImGui::Selectable(
-                        particleDataTypes[i].name.c_str(),
-                        isSelected))
-                    {
-                        selectedIEDF = i;
-                    }
-
-                    if (isSelected)
-                        ImGui::SetItemDefaultFocus();
                 }
 
-                ImGui::EndCombo();
             }
+            ImGui::End();
 
-            const auto& x = particleDataTypes[selectedIEDF].iedf.energyCenters;
-            const auto& y = particleDataTypes[selectedIEDF].iedf.pdf;
-
-            double width = x.size() > 1 ? (x[1] - x[0]) : 1.0;
-            ImPlot::SetupAxes(
-                "Energy (eV)",
-                "Ion Flux (mol m^{-2} s^{-1} eV^{-1})"
-            );
-
-            ImPlot::PlotBars(
-                "IEDF",
-                x.data(),
-                y.data(),
-                static_cast<int>(x.size()),
-                width
-            );
-
-            ImPlot::EndPlot();
-        }
-
-        ImGui::Begin("Graph");
-        if (previewWidth && previewHeight && ImPlot::BeginPlot("Slice"))
-        {
-            ImPlot::SetupAxes(
-                "X",
-                (sliceDir == 1) ? "Z" : "Y"
-            );
-
-            ImPlot::SetupAxisLimits(
-                ImAxis_X1,
-                0,
-                previewWidth,
-                ImGuiCond_Always
-            );
-
-            ImPlot::SetupAxisLimits(
-                ImAxis_Y1,
-                0,
-                previewHeight,
-                ImGuiCond_Always
-            );
-
-
-            ImPlot::PlotImage(
-                "Slice",
-                (ImTextureID)(intptr_t)sliceTexture,
-                ImPlotPoint(0, 0),
-                ImPlotPoint(
-                    previewWidth,
-                    previewHeight
-                )
-            );
-
-            if (ImPlot::IsPlotHovered())
+            ImGui::Begin("Graph");
+            if (previewWidth && previewHeight && ImPlot::BeginPlot("Slice"))
             {
-                ImPlotPoint p =
-                    ImPlot::GetPlotMousePos();
-
-                ImGui::Text(
-                    "X: %.1f  Y: %.1f",
-                    p.x,
-                    p.y
+                ImPlot::SetupAxes(
+                    "X",
+                    (sliceDir == 1) ? "Z" : "Y"
                 );
-            }
-            ImPlot::EndPlot();
 
+                ImPlot::SetupAxisLimits(
+                    ImAxis_X1,
+                    0,
+                    previewWidth,
+                    ImGuiCond_Always
+                );
+
+                ImPlot::SetupAxisLimits(
+                    ImAxis_Y1,
+                    0,
+                    previewHeight,
+                    ImGuiCond_Always
+                );
+
+
+                ImPlot::PlotImage(
+                    "Slice",
+                    (ImTextureID)(intptr_t)sliceTexture,
+                    ImPlotPoint(0, 0),
+                    ImPlotPoint(
+                        previewWidth,
+                        previewHeight
+                    )
+                );
+
+                if (ImPlot::IsPlotHovered())
+                {
+                    ImPlotPoint p =
+                        ImPlot::GetPlotMousePos();
+
+                    ImGui::Text(
+                        "X: %.1f  Y: %.1f",
+                        p.x,
+                        p.y
+                    );
+                }
+                ImPlot::EndPlot();
+
+            }
+            ImGui::End();
         }
-        ImGui::End();
         ImGui::Render();
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

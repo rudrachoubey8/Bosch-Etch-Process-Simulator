@@ -11,6 +11,11 @@ struct Voxel {
     int type;
 };
 
+enum Page {
+    PlasmaModel,
+    RenderPage
+};
+
 struct EnergyDistribution
 {
     std::vector<float> energyCenters;
