@@ -13,6 +13,7 @@ struct Voxel {
 
 enum Page {
     PlasmaModel,
+    ParticleSetup,
     RenderPage
 };
 
@@ -32,6 +33,7 @@ struct ParticleTypeData
 
     bool deposit = false;
     bool draw = true;
+    bool custom = false;
 
     int interval = 10;
 

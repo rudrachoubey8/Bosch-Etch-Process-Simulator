@@ -32,7 +32,7 @@ using namespace std;
 namespace
 {
     constexpr uint32_t PARTICLE_DATA_MAGIC = 0x42504550;
-    constexpr uint32_t PARTICLE_DATA_VERSION = 1;
+    constexpr uint32_t PARTICLE_DATA_VERSION = 2;
     constexpr uint32_t MAX_SERIALIZED_ITEMS = 1000000;
 
     template <typename T>
@@ -91,6 +91,7 @@ namespace
     {
         const uint8_t deposit = particle.deposit ? 1 : 0;
         const uint8_t draw = particle.draw ? 1 : 0;
+        const uint8_t custom = particle.custom ? 1 : 0;
 
         return
             writeValue(out, particle.count) &&
@@ -99,24 +100,31 @@ namespace
             writeValue(out, particle.halfAngle) &&
             writeValue(out, deposit) &&
             writeValue(out, draw) &&
+            writeValue(out, custom) &&
             writeValue(out, particle.interval) &&
             writeString(out, particle.name) &&
             writeFloatVector(out, particle.iedf.energyCenters) &&
             writeFloatVector(out, particle.iedf.pdf);
     }
 
-    bool readParticleType(std::istream& in, ParticleTypeData& particle)
+    bool readParticleType(std::istream& in, ParticleTypeData& particle, uint32_t version)
     {
         uint8_t deposit = 0;
         uint8_t draw = 0;
+        uint8_t custom = 0;
 
         if (!readValue(in, particle.count) ||
             !readValue(in, particle.energy) ||
             !readValue(in, particle.stddev) ||
             !readValue(in, particle.halfAngle) ||
             !readValue(in, deposit) ||
-            !readValue(in, draw) ||
-            !readValue(in, particle.interval) ||
+            !readValue(in, draw))
+            return false;
+
+        if (version >= 2 && !readValue(in, custom))
+            return false;
+
+        if (!readValue(in, particle.interval) ||
             !readString(in, particle.name) ||
             !readFloatVector(in, particle.iedf.energyCenters) ||
             !readFloatVector(in, particle.iedf.pdf))
@@ -124,6 +132,7 @@ namespace
 
         particle.deposit = deposit != 0;
         particle.draw = draw != 0;
+        particle.custom = custom != 0;
         return particle.iedf.energyCenters.size() == particle.iedf.pdf.size();
     }
 
@@ -232,6 +241,35 @@ namespace
         particle.draw = true;
         particle.iedf.energyCenters = { particle.energy };
         particle.iedf.pdf = { 1.0f };
+        return particle;
+    }
+
+    void makeMonoEnergy(ParticleTypeData& particle)
+    {
+        particle.energy = std::max(particle.energy, 0.01f);
+        particle.iedf.energyCenters = { particle.energy };
+        particle.iedf.pdf = { 1.0f };
+    }
+
+    ParticleTypeData makeFireableFromTemplate(
+        const ParticleTypeData& source,
+        int duration)
+    {
+        ParticleTypeData particle = source;
+        particle.custom = false;
+        particle.interval = std::max(duration, 1);
+        return particle;
+    }
+
+    ParticleTypeData makeCustomParticle(
+        const std::string& name,
+        const SpeciesProperties& properties,
+        int duration)
+    {
+        ParticleTypeData particle = makeSprayParticle(name, properties, 1e18);
+        particle.custom = true;
+        particle.interval = std::max(duration, 1);
+        makeMonoEnergy(particle);
         return particle;
     }
 }
@@ -665,6 +703,9 @@ void renderMesh(Simulation& simulation) {
     initializeSheath(bulk, sheath);
 
     vector<ParticleTypeData> particleDataTypes = generateParticles(bulk, sheath);
+    for (ParticleTypeData& particle : particleDataTypes)
+        particle.interval = duration;
+    vector<ParticleTypeData> plasmaParticleTemplates = particleDataTypes;
     typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
     setDefaultProbabilities(gridData, typesOfParticles, typesOfVoxels);
 
@@ -677,6 +718,7 @@ void renderMesh(Simulation& simulation) {
     std::sort(spraySpeciesNames.begin(), spraySpeciesNames.end());
     
     int selectedSpraySpecies = 0;
+    int selectedTemplateParticle = 0;
     int selectedIEDF = 0;
 
     bool forceMeshBuild = true;
@@ -747,13 +789,21 @@ void renderMesh(Simulation& simulation) {
 
         if (ImGui::BeginMainMenuBar())
         {
-            if (ImGui::BeginMenu("Pages"))
+            if (ImGui::BeginMenu("Render Page"))
             {
-                if (ImGui::MenuItem("Render Page"))
-                    currentPage = Page::RenderPage;
+                currentPage = Page::RenderPage;
 
-                if (ImGui::MenuItem("Plasma Model"))
-                    currentPage = Page::PlasmaModel;
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Plasma Model"))
+            {
+                currentPage = Page::PlasmaModel;
+
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Particles"))
+            {
+                currentPage = Page::ParticleSetup;
 
                 ImGui::EndMenu();
             }
@@ -775,6 +825,7 @@ void renderMesh(Simulation& simulation) {
             ImGui::Text("Electron Temp: %.3f eV", bulk.Te0);
             ImGui::Text("Neutral Gas Density: %.3e m^-3", bulk.Ngas);
             ImGui::InputDouble("Absorbed Power (W)", &bulk.Pabs, 1.0, 10.0, "%.3f");
+            ImGui::InputDouble("Temperature (K)", &bulk.gasTemp, 1.0, 1000, "%.3f");
             ImGui::InputDouble("Pump Rate", &bulk.pump, 0.1, 1.0, "%.3f");
             ImGui::InputDouble("Time Step", &bulk.dt, 1e-10, 1e-9, "%.3e");
             ImGui::InputDouble("Model Duration", &bulk.duration, 1e-5, 1e-4, "%.3e");
@@ -798,22 +849,42 @@ void renderMesh(Simulation& simulation) {
 
                 advanceModelForDuration(bulk);
                 initializeSheath(bulk, sheath);
-                particleDataTypes = generateParticles(bulk, sheath);
+                plasmaParticleTemplates = generateParticles(bulk, sheath);
+                for (ParticleTypeData& particle : plasmaParticleTemplates)
+                    particle.interval = duration;
 
-                for (const ParticleTypeData& oldParticle : oldParticles)
+                for (ParticleTypeData& fireable : particleDataTypes)
                 {
-                    bool alreadyFireable = false;
-                    for (const ParticleTypeData& particle : particleDataTypes)
-                    {
-                        if (particle.name == oldParticle.name)
+                    if (fireable.custom)
+                        continue;
+
+                    const int savedDuration = fireable.interval;
+                    auto matchingTemplate = std::find_if(
+                        plasmaParticleTemplates.begin(),
+                        plasmaParticleTemplates.end(),
+                        [&](const ParticleTypeData& source)
                         {
-                            alreadyFireable = true;
-                            break;
-                        }
+                            return source.name == fireable.name;
+                        });
+
+                    if (matchingTemplate != plasmaParticleTemplates.end())
+                    {
+                        fireable = makeFireableFromTemplate(*matchingTemplate, savedDuration);
                     }
+                }
+
+                for (const ParticleTypeData& source : plasmaParticleTemplates)
+                {
+                    const bool alreadyFireable = std::any_of(
+                        particleDataTypes.begin(),
+                        particleDataTypes.end(),
+                        [&](const ParticleTypeData& particle)
+                        {
+                            return particle.name == source.name;
+                        });
 
                     if (!alreadyFireable)
-                        particleDataTypes.push_back(oldParticle);
+                        particleDataTypes.push_back(makeFireableFromTemplate(source, duration));
                 }
 
                 typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
@@ -849,7 +920,7 @@ void renderMesh(Simulation& simulation) {
                 ImGui::Text("Sheath Voltage: %.3f V", sheath.voltage);
                 ImGui::Text("Sheath Thickness: %.3e m", sheath.thickness);
             }
-            ImGui::Text("Generated Ion Species: %d", static_cast<int>(particleDataTypes.size()));
+            ImGui::Text("Generated Ion Species: %d", static_cast<int>(plasmaParticleTemplates.size()));
 
 
 
@@ -862,7 +933,7 @@ void renderMesh(Simulation& simulation) {
                 ImGui::TableSetupColumn("Bins");
                 ImGui::TableHeadersRow();
 
-                for (const ParticleTypeData& particle : particleDataTypes)
+                for (const ParticleTypeData& particle : plasmaParticleTemplates)
                 {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
@@ -876,187 +947,6 @@ void renderMesh(Simulation& simulation) {
                 }
 
                 ImGui::EndTable();
-            }
-
-            ImGui::Separator();
-
-            if (!spraySpeciesNames.empty())
-            {
-                selectedSpraySpecies = std::clamp(
-                    selectedSpraySpecies,
-                    0,
-                    static_cast<int>(spraySpeciesNames.size()) - 1);
-
-                if (ImGui::BeginCombo(
-                    "Spray Species",
-                    spraySpeciesNames[selectedSpraySpecies].c_str()))
-                {
-                    for (int i = 0; i < static_cast<int>(spraySpeciesNames.size()); ++i)
-                    {
-                        const bool selected = i == selectedSpraySpecies;
-                        if (ImGui::Selectable(spraySpeciesNames[i].c_str(), selected))
-                            selectedSpraySpecies = i;
-                        if (selected)
-                            ImGui::SetItemDefaultFocus();
-                    }
-                    ImGui::EndCombo();
-                }
-
-                if (ImGui::Button("Add Spray Particle"))
-                {
-                    const std::string& name = spraySpeciesNames[selectedSpraySpecies];
-                    bool alreadyFireable = false;
-
-                    for (const ParticleTypeData& particle : particleDataTypes)
-                    {
-                        if (particle.name == name)
-                        {
-                            alreadyFireable = true;
-                            break;
-                        }
-                    }
-
-                    if (!alreadyFireable)
-                    {
-                        const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
-                        const std::vector<float> oldGrid = gridData;
-                        particleDataTypes.push_back(
-                            makeSprayParticle(
-                                name,
-                                Species[name],
-                                bulk.densities[name]));
-                        typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
-                        rebuildProbabilityGrid(
-                            oldParticles,
-                            oldGrid,
-                            particleDataTypes,
-                            typesOfVoxels,
-                            gridData);
-                    }
-                }
-            }
-
-            if (ImGui::BeginTable("FireableParticles", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
-            {
-                ImGui::TableSetupColumn("Particle");
-                ImGui::TableSetupColumn("Charge");
-                ImGui::TableSetupColumn("Count");
-                ImGui::TableSetupColumn("Energy");
-                ImGui::TableSetupColumn("Angle");
-                ImGui::TableSetupColumn("Deposit");
-                ImGui::TableSetupColumn("Remove");
-
-                ImGui::TableHeadersRow();
-
-                int removeParticle = -1;
-                for (int i = 0; i < static_cast<int>(particleDataTypes.size()); ++i)
-                {
-                    ParticleTypeData& particle = particleDataTypes[i];
-                    ImGui::PushID(i);
-                    ImGui::TableNextRow();
-
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%s", particle.name.c_str());
-
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%d", Species[particle.name].charge);
-
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    ImGui::InputInt("##count", &particle.count);
-                    if (particle.count < 1)
-                        particle.count = 1;
-
-                    ImGui::TableSetColumnIndex(3);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    if (ImGui::InputFloat("##energy", &particle.energy))
-                    {
-                        if (particle.energy < 0.01f)
-                            particle.energy = 0.01f;
-                        particle.iedf.energyCenters = { particle.energy };
-                        particle.iedf.pdf = { 1.0f };
-                    }
-
-                    ImGui::TableSetColumnIndex(4);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    ImGui::InputFloat("##angle", &particle.halfAngle);
-                    particle.halfAngle = std::clamp(particle.halfAngle, 0.0f, 89.0f);
-
-                    ImGui::TableSetColumnIndex(5);
-                    ImGui::Checkbox("##deposit", &particle.deposit);
-
-                    ImGui::TableSetColumnIndex(6);
-                    if (ImGui::Button("Remove"))
-                        removeParticle = i;
-
-                    ImGui::PopID();
-                }
-
-                if (removeParticle >= 0)
-                {
-                    const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
-                    const std::vector<float> oldGrid = gridData;
-                    particleDataTypes.erase(particleDataTypes.begin() + removeParticle);
-                    typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
-                    rebuildProbabilityGrid(
-                        oldParticles,
-                        oldGrid,
-                        particleDataTypes,
-                        typesOfVoxels,
-                        gridData);
-                }
-
-                ImGui::EndTable();
-            }
-
-            if (ImGui::CollapsingHeader("Surface Probabilities", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                for (int voxel = 0; voxel < typesOfVoxels; ++voxel)
-                {
-                    ImGui::PushID(voxel);
-                    if (ImGui::TreeNode("Voxel Type", "Voxel Type %d", voxel))
-                    {
-                        if (ImGui::BeginTable("SurfaceProbabilityTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
-                        {
-                            ImGui::TableSetupColumn("Particle");
-                            ImGui::TableSetupColumn("Reaction");
-                            ImGui::TableSetupColumn("Deposit");
-                            ImGui::TableSetupColumn("Adsorb");
-                            ImGui::TableHeadersRow();
-
-                            for (int particle = 0; particle < static_cast<int>(particleDataTypes.size()); ++particle)
-                            {
-                                ImGui::PushID(particle);
-                                ImGui::TableNextRow();
-
-                                ImGui::TableSetColumnIndex(0);
-                                ImGui::Text("%s", particleDataTypes[particle].name.c_str());
-
-                                for (int kind = 0; kind < 3; ++kind)
-                                {
-                                    ImGui::TableSetColumnIndex(kind + 1);
-                                    float& probability =
-                                        gridData[
-                                            probabilityIndex(
-                                                particle,
-                                                voxel,
-                                                kind,
-                                                typesOfParticles,
-                                                typesOfVoxels)];
-                                    ImGui::SetNextItemWidth(-FLT_MIN);
-                                    ImGui::InputFloat("##prob", &probability, 0.01f, 0.1f, "%.3f");
-                                    probability = std::clamp(probability, 0.0f, 1.0f);
-                                }
-
-                                ImGui::PopID();
-                            }
-
-                            ImGui::EndTable();
-                        }
-                        ImGui::TreePop();
-                    }
-                    ImGui::PopID();
-                }
             }
 
             if (ImGui::CollapsingHeader("Species Densities"))
@@ -1136,6 +1026,330 @@ void renderMesh(Simulation& simulation) {
 
                 ImPlot::EndPlot();
             }
+        }
+
+
+        else if (currentPage == Page::ParticleSetup) {
+            ImGui::Begin("Particle Firing");
+            ImGui::Text("Global Simulation Duration: %d frames", duration);
+
+            if (!plasmaParticleTemplates.empty())
+            {
+                selectedTemplateParticle = std::clamp(
+                    selectedTemplateParticle,
+                    0,
+                    static_cast<int>(plasmaParticleTemplates.size()) - 1);
+
+                if (ImGui::BeginCombo(
+                    "Plasma Particle",
+                    plasmaParticleTemplates[selectedTemplateParticle].name.c_str()))
+                {
+                    for (int i = 0; i < static_cast<int>(plasmaParticleTemplates.size()); ++i)
+                    {
+                        const bool selected = i == selectedTemplateParticle;
+                        if (ImGui::Selectable(plasmaParticleTemplates[i].name.c_str(), selected))
+                            selectedTemplateParticle = i;
+                        if (selected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+
+                if (ImGui::Button("Add Plasma Particle"))
+                {
+                    const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
+                    const std::vector<float> oldGrid = gridData;
+                    particleDataTypes.push_back(
+                        makeFireableFromTemplate(
+                            plasmaParticleTemplates[selectedTemplateParticle],
+                            duration));
+                    typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+                    rebuildProbabilityGrid(
+                        oldParticles,
+                        oldGrid,
+                        particleDataTypes,
+                        typesOfVoxels,
+                        gridData);
+                }
+            }
+
+            if (!spraySpeciesNames.empty())
+            {
+                selectedSpraySpecies = std::clamp(
+                    selectedSpraySpecies,
+                    0,
+                    static_cast<int>(spraySpeciesNames.size()) - 1);
+
+                if (ImGui::BeginCombo(
+                    "Custom Particle Species",
+                    spraySpeciesNames[selectedSpraySpecies].c_str()))
+                {
+                    for (int i = 0; i < static_cast<int>(spraySpeciesNames.size()); ++i)
+                    {
+                        const bool selected = i == selectedSpraySpecies;
+                        if (ImGui::Selectable(spraySpeciesNames[i].c_str(), selected))
+                            selectedSpraySpecies = i;
+                        if (selected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+
+                if (ImGui::Button("Add Custom Particle"))
+                {
+                    const std::string& name = spraySpeciesNames[selectedSpraySpecies];
+                    const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
+                    const std::vector<float> oldGrid = gridData;
+                    particleDataTypes.push_back(
+                        makeCustomParticle(
+                            name,
+                            Species[name],
+                            duration));
+                    typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+                    rebuildProbabilityGrid(
+                        oldParticles,
+                        oldGrid,
+                        particleDataTypes,
+                        typesOfVoxels,
+                        gridData);
+                }
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::BeginTable(
+                "FireableParticles",
+                10,
+                ImGuiTableFlags_Borders |
+                ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_Resizable |
+                ImGuiTableFlags_ScrollX))
+            {
+                ImGui::TableSetupColumn("Particle Type");
+                ImGui::TableSetupColumn("Source");
+                ImGui::TableSetupColumn("Custom");
+                ImGui::TableSetupColumn("Duration");
+                ImGui::TableSetupColumn("Count");
+                ImGui::TableSetupColumn("Energy");
+                ImGui::TableSetupColumn("Angle");
+                ImGui::TableSetupColumn("Deposit");
+                ImGui::TableSetupColumn("IEDF Bins");
+                ImGui::TableSetupColumn("Remove");
+                ImGui::TableHeadersRow();
+
+                int removeParticle = -1;
+                for (int i = 0; i < static_cast<int>(particleDataTypes.size()); ++i)
+                {
+                    ParticleTypeData& particle = particleDataTypes[i];
+                    ImGui::PushID(i);
+                    ImGui::TableNextRow();
+
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%s", particle.name.c_str());
+
+                    ImGui::TableSetColumnIndex(1);
+                    if (particle.custom || plasmaParticleTemplates.empty())
+                    {
+                        ImGui::Text("Mono");
+                    }
+                    else
+                    {
+                        int currentTemplate = 0;
+                        for (int sourceIndex = 0; sourceIndex < static_cast<int>(plasmaParticleTemplates.size()); ++sourceIndex)
+                        {
+                            if (plasmaParticleTemplates[sourceIndex].name == particle.name)
+                            {
+                                currentTemplate = sourceIndex;
+                                break;
+                            }
+                        }
+
+                        if (ImGui::BeginCombo(
+                            "##source",
+                            plasmaParticleTemplates[currentTemplate].name.c_str()))
+                        {
+                            for (int sourceIndex = 0; sourceIndex < static_cast<int>(plasmaParticleTemplates.size()); ++sourceIndex)
+                            {
+                                const bool selected = sourceIndex == currentTemplate;
+                                if (ImGui::Selectable(plasmaParticleTemplates[sourceIndex].name.c_str(), selected))
+                                {
+                                    const int savedDuration = particle.interval;
+                                    particle = makeFireableFromTemplate(
+                                        plasmaParticleTemplates[sourceIndex],
+                                        savedDuration);
+                                }
+                                if (selected)
+                                    ImGui::SetItemDefaultFocus();
+                            }
+                            ImGui::EndCombo();
+                        }
+                    }
+
+                    ImGui::TableSetColumnIndex(2);
+                    bool custom = particle.custom;
+                    if (ImGui::Checkbox("##custom", &custom))
+                    {
+                        particle.custom = custom;
+                        if (particle.custom)
+                        {
+                            makeMonoEnergy(particle);
+                        }
+                        else
+                        {
+                            const int savedDuration = particle.interval;
+                            auto matchingTemplate = std::find_if(
+                                plasmaParticleTemplates.begin(),
+                                plasmaParticleTemplates.end(),
+                                [&](const ParticleTypeData& source)
+                                {
+                                    return source.name == particle.name;
+                                });
+                            if (matchingTemplate != plasmaParticleTemplates.end())
+                                particle = makeFireableFromTemplate(*matchingTemplate, savedDuration);
+                            else
+                                particle.custom = true;
+                        }
+                    }
+
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::InputInt("##duration", &particle.interval);
+                    particle.interval = std::clamp(particle.interval, 1, 1000000);
+
+                    ImGui::TableSetColumnIndex(4);
+                    if (particle.custom)
+                    {
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        ImGui::InputInt("##count", &particle.count);
+                        particle.count = std::max(particle.count, 1);
+                    }
+                    else
+                    {
+                        ImGui::Text("%d", particle.count);
+                    }
+
+                    ImGui::TableSetColumnIndex(5);
+                    if (particle.custom)
+                    {
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        if (ImGui::InputFloat("##energy", &particle.energy))
+                            makeMonoEnergy(particle);
+                    }
+                    else
+                    {
+                        ImGui::Text("%.3f", particle.energy);
+                    }
+
+                    ImGui::TableSetColumnIndex(6);
+                    if (particle.custom)
+                    {
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        ImGui::InputFloat("##angle", &particle.halfAngle);
+                        particle.halfAngle = std::clamp(particle.halfAngle, 0.0f, 89.0f);
+                    }
+                    else
+                    {
+                        ImGui::Text("%.1f", particle.halfAngle);
+                    }
+
+                    ImGui::TableSetColumnIndex(7);
+                    if (particle.custom)
+                    {
+                        ImGui::Checkbox("##deposit", &particle.deposit);
+                    }
+                    else
+                    {
+                        ImGui::Text("%s", particle.deposit ? "Yes" : "No");
+                    }
+
+                    ImGui::TableSetColumnIndex(8);
+                    ImGui::Text("%d", static_cast<int>(particle.iedf.pdf.size()));
+
+                    ImGui::TableSetColumnIndex(9);
+                    if (ImGui::Button("Remove"))
+                        removeParticle = i;
+
+                    ImGui::PopID();
+                }
+
+                if (removeParticle >= 0)
+                {
+                    const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
+                    const std::vector<float> oldGrid = gridData;
+                    particleDataTypes.erase(particleDataTypes.begin() + removeParticle);
+                    typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+                    rebuildProbabilityGrid(
+                        oldParticles,
+                        oldGrid,
+                        particleDataTypes,
+                        typesOfVoxels,
+                        gridData);
+                }
+
+                ImGui::EndTable();
+            }
+
+            ImGui::End();
+
+            ImGui::Begin("Surface Probabilities");
+            static int selectedProbabilityKind = 0;
+            const char* probabilityKinds[] = { "Reaction", "Deposit", "Adsorb" };
+
+            if (ImGui::BeginTabBar("ProbabilityKindTabs"))
+            {
+                for (int kind = 0; kind < 3; ++kind)
+                {
+                    if (ImGui::BeginTabItem(probabilityKinds[kind]))
+                    {
+                        selectedProbabilityKind = kind;
+                        const int columns = 1 + static_cast<int>(particleDataTypes.size());
+                        if (ImGui::BeginTable(
+                            "SurfaceProbabilityGrid",
+                            columns,
+                            ImGuiTableFlags_Borders |
+                            ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_Resizable |
+                            ImGuiTableFlags_ScrollX))
+                        {
+                            ImGui::TableSetupColumn("Voxel Type");
+                            for (const ParticleTypeData& particle : particleDataTypes)
+                                ImGui::TableSetupColumn(particle.name.c_str());
+                            ImGui::TableHeadersRow();
+
+                            for (int voxel = 0; voxel < typesOfVoxels; ++voxel)
+                            {
+                                ImGui::TableNextRow();
+                                ImGui::TableSetColumnIndex(0);
+                                ImGui::Text("Voxel %d", voxel);
+
+                                for (int particle = 0; particle < static_cast<int>(particleDataTypes.size()); ++particle)
+                                {
+                                    ImGui::TableSetColumnIndex(particle + 1);
+                                    float& probability =
+                                        gridData[
+                                            probabilityIndex(
+                                                particle,
+                                                voxel,
+                                                selectedProbabilityKind,
+                                                typesOfParticles,
+                                                typesOfVoxels)];
+                                    ImGui::PushID(voxel * 100000 + particle);
+                                    ImGui::SetNextItemWidth(90.0f);
+                                    ImGui::InputFloat("##prob", &probability, 0.01f, 0.1f, "%.3f");
+                                    probability = std::clamp(probability, 0.0f, 1.0f);
+                                    ImGui::PopID();
+                                }
+                            }
+
+                            ImGui::EndTable();
+                        }
+                        ImGui::EndTabItem();
+                    }
+                }
+                ImGui::EndTabBar();
+            }
+
+            ImGui::End();
         }
 
 
@@ -1257,18 +1471,19 @@ void renderMesh(Simulation& simulation) {
                             readValue(in, particleVersion) &&
                             readValue(in, particleCount) &&
                             particleMagic == PARTICLE_DATA_MAGIC &&
-                            particleVersion == PARTICLE_DATA_VERSION &&
+                            particleVersion >= 1 &&
+                            particleVersion <= PARTICLE_DATA_VERSION &&
                             particleCount <= MAX_SERIALIZED_ITEMS;
 
                         if (validParticleData)
                         {
-                            particleDataTypes.resize(particleCount);
-                            for (ParticleTypeData& particle : particleDataTypes)
+                        particleDataTypes.resize(particleCount);
+                        for (ParticleTypeData& particle : particleDataTypes)
+                        {
+                            if (!readParticleType(in, particle, particleVersion))
                             {
-                                if (!readParticleType(in, particle))
-                                {
-                                    validParticleData = false;
-                                    break;
+                                validParticleData = false;
+                                break;
                                 }
                             }
                         }
@@ -1450,6 +1665,9 @@ void renderMesh(Simulation& simulation) {
                     {
                         for (int i = 0;i < particleDataTypes.size();i++)
                         {
+                            if (frame > particleDataTypes[i].interval)
+                                continue;
+
                             ParticleTypeData p = particleDataTypes[i];
                             // Upload particles
 
