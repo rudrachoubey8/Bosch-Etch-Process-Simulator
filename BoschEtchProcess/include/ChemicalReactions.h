@@ -115,6 +115,7 @@ struct Sheath {
 	std::vector<double> thicknessWaveform;
 };
 
+void initializeDefaultBulk(BulkModel& bulk, double gasTemp = 390.0);
 
 void advanceModel(BulkModel& bulk);
 

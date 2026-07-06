@@ -445,7 +445,7 @@ void renderMesh(Simulation& simulation) {
     float voxelThreshold = 500;
     float voxelDepositThreshold = 500;
 
-    int typesOfVoxels = 3;
+    int typesOfVoxels = 4;
     
     int typesOfParticles = 4;
     char fileName2[256] = "slice.txt";
@@ -500,8 +500,8 @@ void renderMesh(Simulation& simulation) {
     ImGuiIO& io = ImGui::GetIO();
 
 
-    ImGui::StyleColorsDark();
-    ImPlot::StyleColorsDark();
+    ImGui::StyleColorsLight();
+    ImPlot::StyleColorsLight();
 
     // Backend init
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -510,203 +510,18 @@ void renderMesh(Simulation& simulation) {
     static BulkModel bulk;
     static Sheath sheath;
 
-    bulk.dt = 1e-9;
-    bulk.duration = 1e-3;
-
-    bulk.Te0 = 3.0;
-
-    const double reactorRadius = 0.1;
-    const double reactorLength = 0.03;
-    bulk.Volume = PI * reactorRadius * reactorRadius * reactorLength;
-    bulk.Area = 2.0 * PI * reactorRadius * reactorLength +
-        2.0 * PI * reactorRadius * reactorRadius;
-    bulk.substrateArea = 0.01;
-    bulk.pressureMtorr = 10.0;
-    bulk.gasTemp = 373.0;
-    bulk.Pabs = 700.0 * 0.3;
-    bulk.biasPower = 200.0;
-    bulk.biasFrequency = 2.0e6;
-    bulk.biasVoltageGuess = 100.0;
-    bulk.residualVoltageRipple = 20.0;
-    bulk.sheathPoints = 240;
-    bulk.sheathIterations = 20;
-    bulk.ionCount = 5000;
-    bulk.ionDt = 1e-9;
-    bulk.maxCycles = 20;
-    bulk.enableChargeExchange = true;
-    bulk.enableMomentumTransfer = true;
-    bulk.chargeExchangeScale = 0.1;
-    bulk.momentumTransferScale = 1.0;
-    bulk.useBias = true;
-    bulk.motherNeutralFlowSccm = {
-        {"Ar", 40.0},
-        {"C4F8", 200.0}
-    };
-
-    const double pressurePa = bulk.pressureMtorr * 0.133322;
-    const double totalFlowSccm = 240.0;
-    const double totalGasDensity = pressurePa / (K_B * bulk.gasTemp);
-    for (const auto& species : Species)
-    {
-        bulk.densities[species.first] = species.second.charge == 0 ? 1.0 : 0.0;
-    }
-    bulk.densities["Ar"] = totalGasDensity * (40.0 / totalFlowSccm);
-    bulk.densities["C4F8"] = totalGasDensity * (200.0 / totalFlowSccm);
-    bulk.densities["CF3+"] = 2.0e18;
-    bulk.densities["CF2+"] = 2.0e18;
-    bulk.densities["Ar+"] = 2.0e18;
-    bulk.densities["e-"] = 2.0e18;
-    bulk.Ngas = totalGasDensity;
-    const double ndotTotal = totalFlowSccm * 4.48e17;
-    bulk.pump = (ndotTotal * K_B * bulk.gasTemp / pressurePa) / bulk.Volume;
-
-    bulk.reactions =
-    {
-        // Ar + e- -> Ar* + e-
-        {
-            "r11_Ar",
-            11.6,
-            6.033e-15, 0.3287, 12.08,
-            {{"Ar",1},{"e-",1}},
-            {{"Ar*",1},{"e-",1}}
-        },
-
-        // Ar + e- -> Ar+ + 2e-
-        {
-            "r12_Ar",
-            15.76,
-            2.160e-14, 0.6329, 16.0627,
-            {{"Ar",1},{"e-",1}},
-            {{"Ar+",1},{"e-",2}}
-        },
-
-        // Ar* + e- -> Ar+ + 2e-
-        {
-            "r13_Ar",
-            4.43,
-            1.698e-13, 0.1072, 4.4129,
-            {{"Ar*",1},{"e-",1}},
-            {{"Ar+",1},{"e-",2}}
-        },
-
-        // Ar* + e- -> Ar + e-
-        {
-            "r14_Ar",
-            -11.6,
-            3.969e-15, 0.2894, 0.7412,
-            {{"Ar*",1},{"e-",1}},
-            {{"Ar",1},{"e-",1}}
-        },
-
-        // Ar* + Ar* -> Ar+ + Ar + e-
-        {
-            "r15_Ar",
-            0.0,
-            1.20e-15, 0.0, 0.0,
-            {{"Ar*",2}},
-            {{"Ar+",1},{"Ar",1},{"e-",1}}
-        },
-
-        // CF4 excitation
-        {
-            "r2_CF4",
-            0.15,
-            3.26e-14, -0.317, 0.230,
-            {{"CF4",1},{"e-",1}},
-            {{"CF4*",1},{"e-",1}}
-        },
-
-        // C4F8 ionization
-        {
-            "r2_C4F8",
-            17.0,
-            5.70e-14, 0.470, 17.480,
-            {{"C4F8",1},{"e-",1}},
-            {{"C2F4+",1},{"C2F4",1},{"e-",2}}
-        },
-
-        // C4F8 dissociation
-        {
-            "r3_C4F8",
-            2.42,
-            9.58e-14, 0.042, 8.572,
-            {{"C4F8",1},{"e-",1}},
-            {{"C2F4",2},{"e-",1}}
-        },
-
-        // C2F4 dissociation
-        {
-            "r4_C2F4",
-            3.06,
-            1.32e-15, 0.412, 6.329,
-            {{"C2F4",1},{"e-",1}},
-            {{"CF2",2},{"e-",1}}
-        },
-
-        // CF3 ionization
-        {
-            "r5_CF3",
-            10.0,
-            1.36e-15, 0.796, 9.057,
-            {{"CF3",1},{"e-",1}},
-            {{"CF3+",1},{"e-",2}}
-        },
-
-        // CF3 attachment
-        {
-            "r6_CF3",
-            9.0,
-            1.0e-16, 0.0, 0.0,
-            {{"CF3",1},{"e-",1}},
-            {{"CF2",1},{"F-",1}}
-        },
-
-        // CF2 ionization
-        {
-            "r7_CF2",
-            10.0,
-            1.10e-14, 0.393, 11.370,
-            {{"CF2",1},{"e-",1}},
-            {{"CF2+",1},{"e-",2}}
-        },
-
-        // F- detachment
-        {
-            "r8_Fm",
-            13.0,
-            6.27e-14, 0.193, 12.918,
-            {{"F-",1},{"e-",1}},
-            {{"F",1},{"e-",2}}
-        },
-
-        // CF2 + F -> CF3
-        {
-            "r9_CF2F",
-            0.0,
-            1.40e-20, 0.0, 0.0,
-            {{"CF2",1},{"F",1}},
-            {{"CF3",1}}
-        },
-
-        // CF3 + F -> CF4
-        {
-            "r10_CF3F",
-            0.0,
-            2.32e-18, 0.0, 0.0,
-            {{"CF3",1},{"F",1}},
-            {{"CF4",1}}
-        }
-    };
+    initializeDefaultBulk(bulk);
 
     advanceModelForDuration(bulk);
-
     initializeSheath(bulk, sheath);
 
     vector<ParticleTypeData> particleDataTypes = generateParticles(bulk, sheath);
     for (ParticleTypeData& particle : particleDataTypes)
         particle.interval = duration;
+    
     vector<ParticleTypeData> plasmaParticleTemplates = particleDataTypes;
     typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+
     setDefaultProbabilities(gridData, typesOfParticles, typesOfVoxels);
 
     std::vector<std::string> spraySpeciesNames;
@@ -716,7 +531,7 @@ void renderMesh(Simulation& simulation) {
             spraySpeciesNames.push_back(species.first);
     }
     std::sort(spraySpeciesNames.begin(), spraySpeciesNames.end());
-    
+
     int selectedSpraySpecies = 0;
     int selectedTemplateParticle = 0;
     int selectedIEDF = 0;
@@ -737,8 +552,6 @@ void renderMesh(Simulation& simulation) {
 
         float cx = cos(pitch);
         float sx = sin(pitch);
-
-
 
         float rayOrigin[3] = {
             D * cx * sin(yaw),
@@ -785,8 +598,6 @@ void renderMesh(Simulation& simulation) {
         };
 
 
-
-
         if (ImGui::BeginMainMenuBar())
         {
             if (ImGui::BeginMenu("Render Page"))
@@ -813,7 +624,7 @@ void renderMesh(Simulation& simulation) {
 
 
 
-        glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+        glClearColor(1.0f,1.0f,1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 
@@ -841,15 +652,38 @@ void renderMesh(Simulation& simulation) {
             ImGui::Checkbox("Charge Exchange", &bulk.enableChargeExchange);
             ImGui::InputDouble("MT Scale", &bulk.momentumTransferScale, 0.1, 1.0, "%.3f");
             ImGui::InputDouble("CX Scale", &bulk.chargeExchangeScale, 0.01, 0.1, "%.3f");
-
+           
             if (ImGui::Button("Run Plasma Model"))
             {
+
                 const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
                 const std::vector<float> oldGrid = gridData;
+                const BulkModel controls = bulk;
+                initializeDefaultBulk(bulk, controls.gasTemp);
+                bulk.dt = controls.dt;
+                bulk.duration = controls.duration;
+                bulk.Pabs = controls.Pabs;
+                bulk.pump = controls.pump;
+                bulk.biasPower = controls.biasPower;
+                bulk.biasFrequency = controls.biasFrequency;
+                bulk.biasVoltageGuess = controls.biasVoltageGuess;
+                bulk.residualVoltageRipple = controls.residualVoltageRipple;
+                bulk.sheathPoints = controls.sheathPoints;
+                bulk.sheathIterations = controls.sheathIterations;
+                bulk.ionCount = controls.ionCount;
+                bulk.ionDt = controls.ionDt;
+                bulk.maxCycles = controls.maxCycles;
+                bulk.enableMomentumTransfer = controls.enableMomentumTransfer;
+                bulk.enableChargeExchange = controls.enableChargeExchange;
+                bulk.momentumTransferScale = controls.momentumTransferScale;
+                bulk.chargeExchangeScale = controls.chargeExchangeScale;
+                bulk.useBias = controls.useBias;
 
                 advanceModelForDuration(bulk);
                 initializeSheath(bulk, sheath);
+
                 plasmaParticleTemplates = generateParticles(bulk, sheath);
+            
                 for (ParticleTypeData& particle : plasmaParticleTemplates)
                     particle.interval = duration;
 
@@ -897,6 +731,7 @@ void renderMesh(Simulation& simulation) {
                 frame = 0;
                 tickTime = 0;
             }
+
 
             if (!sheath.voltageWaveform.empty() && !sheath.thicknessWaveform.empty())
             {
@@ -1010,23 +845,43 @@ void renderMesh(Simulation& simulation) {
                 const auto& x = particleDataTypes[selectedIEDF].iedf.energyCenters;
                 const auto& y = particleDataTypes[selectedIEDF].iedf.pdf;
 
-                double width = x.size() > 1 ? (x[1] - x[0]) : 1.0;
-                ImPlot::SetupAxes(
-                    "Energy (eV)",
-                    "Ion Flux (mol m^{-2} s^{-1} eV^{-1})"
-                );
+                if (!x.empty() && !y.empty())
+                {
+                    double width = x.size() > 1 ? (x[1] - x[0]) : 1.0;
+                    const double xMin = 0.0;
+                    const double xMax = std::max<double>(x.back() + width, width);
+                    double yMax = 0.0;
+                    for (float value : y)
+                    {
+                        if (std::isfinite(value))
+                            yMax = std::max(yMax, static_cast<double>(value));
+                    }
+                    yMax = std::max(yMax * 1.10, 1e-30);
 
-                ImPlot::PlotBars(
-                    "IEDF",
-                    x.data(),
-                    y.data(),
-                    static_cast<int>(x.size()),
-                    width
-                );
+                    ImPlot::SetupAxes(
+                        "Energy (eV)",
+                        "Ion Flux (mol m^{-2} s^{-1} eV^{-1})"
+                    );
+                    ImPlot::SetupAxisLimits(ImAxis_X1, xMin, xMax, ImGuiCond_Once);
+                    ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, yMax, ImGuiCond_Once);
+                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, xMin, xMax);
+                    ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, 0.0, yMax);
+                    ImPlot::SetupAxisZoomConstraints(ImAxis_X1, width * 0.25, xMax - xMin);
+                    ImPlot::SetupAxisZoomConstraints(ImAxis_Y1, yMax * 1e-6, yMax);
+
+                    ImPlot::PlotBars(
+                        "IEDF",
+                        x.data(),
+                        y.data(),
+                        static_cast<int>(x.size()),
+                        width
+                    );
+                }
 
                 ImPlot::EndPlot();
             }
         }
+
 
 
         else if (currentPage == Page::ParticleSetup) {
@@ -1044,7 +899,7 @@ void renderMesh(Simulation& simulation) {
                     "Plasma Particle",
                     plasmaParticleTemplates[selectedTemplateParticle].name.c_str()))
                 {
-                    for (int i = 0; i < static_cast<int>(plasmaParticleTemplates.size()); ++i)
+                    for (int i = 0; i < plasmaParticleTemplates.size(); ++i)
                     {
                         const bool selected = i == selectedTemplateParticle;
                         if (ImGui::Selectable(plasmaParticleTemplates[i].name.c_str(), selected))
@@ -1063,7 +918,7 @@ void renderMesh(Simulation& simulation) {
                         makeFireableFromTemplate(
                             plasmaParticleTemplates[selectedTemplateParticle],
                             duration));
-                    typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+                    typesOfParticles = std::max(1, (int) particleDataTypes.size());
                     rebuildProbabilityGrid(
                         oldParticles,
                         oldGrid,
@@ -1084,7 +939,7 @@ void renderMesh(Simulation& simulation) {
                     "Custom Particle Species",
                     spraySpeciesNames[selectedSpraySpecies].c_str()))
                 {
-                    for (int i = 0; i < static_cast<int>(spraySpeciesNames.size()); ++i)
+                    for (int i = 0; i < spraySpeciesNames.size(); ++i)
                     {
                         const bool selected = i == selectedSpraySpecies;
                         if (ImGui::Selectable(spraySpeciesNames[i].c_str(), selected))
@@ -1105,7 +960,7 @@ void renderMesh(Simulation& simulation) {
                             name,
                             Species[name],
                             duration));
-                    typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
+                    typesOfParticles = std::max(1, (int) particleDataTypes.size());
                     rebuildProbabilityGrid(
                         oldParticles,
                         oldGrid,
@@ -1128,7 +983,7 @@ void renderMesh(Simulation& simulation) {
                 ImGui::TableSetupColumn("Particle Type");
                 ImGui::TableSetupColumn("Source");
                 ImGui::TableSetupColumn("Custom");
-                ImGui::TableSetupColumn("Duration");
+                ImGui::TableSetupColumn("Release Interval");
                 ImGui::TableSetupColumn("Count");
                 ImGui::TableSetupColumn("Energy");
                 ImGui::TableSetupColumn("Angle");
@@ -1138,7 +993,7 @@ void renderMesh(Simulation& simulation) {
                 ImGui::TableHeadersRow();
 
                 int removeParticle = -1;
-                for (int i = 0; i < static_cast<int>(particleDataTypes.size()); ++i)
+                for (int i = 0; i < particleDataTypes.size(); ++i)
                 {
                     ParticleTypeData& particle = particleDataTypes[i];
                     ImGui::PushID(i);
@@ -1168,7 +1023,7 @@ void renderMesh(Simulation& simulation) {
                             "##source",
                             plasmaParticleTemplates[currentTemplate].name.c_str()))
                         {
-                            for (int sourceIndex = 0; sourceIndex < static_cast<int>(plasmaParticleTemplates.size()); ++sourceIndex)
+                            for (int sourceIndex = 0; sourceIndex < plasmaParticleTemplates.size(); ++sourceIndex)
                             {
                                 const bool selected = sourceIndex == currentTemplate;
                                 if (ImGui::Selectable(plasmaParticleTemplates[sourceIndex].name.c_str(), selected))
@@ -1665,15 +1520,11 @@ void renderMesh(Simulation& simulation) {
                     {
                         for (int i = 0;i < particleDataTypes.size();i++)
                         {
-                            if (frame > particleDataTypes[i].interval)
-                                continue;
-
                             ParticleTypeData p = particleDataTypes[i];
-                            // Upload particles
-
-                            simulation.uploadParticles(
-                                p,
-                                i);
+                            if (frame % p.interval == 0)
+                            {
+                                simulation.uploadParticles(p, i);
+                            }
 
                         }
                     }

@@ -154,6 +154,7 @@ namespace
         const double dNow = std::max(periodicLinearInterp(t, ds, tau), 1e-8);
         const double Cs = std::max(EPS0 * bulk.substrateArea / dNow, 1e-15);
 
+
         return (IiTotal - Ie - Irf) / Cs;
     }
 
@@ -172,6 +173,7 @@ namespace
             kernel[i + radius] = w;
             norm += w;
         }
+
         for (double& w : kernel)
             w /= norm;
 
@@ -212,6 +214,170 @@ double electricField(double V, double x, double d)
 
     const double xi = clampValue(x / d, 0.0, 1.0);
     return -(1.5 * V / d) * std::sqrt(xi);
+}
+
+void initializeDefaultBulk(BulkModel& bulk, double gasTemp)
+{
+    bulk = BulkModel{};
+
+    bulk.dt = 1e-9;
+    bulk.duration = 1e-3;
+    bulk.Te0 = 3.0;
+
+    const double reactorRadius = 0.1;
+    const double reactorLength = 0.03;
+    bulk.Volume = PI * reactorRadius * reactorRadius * reactorLength;
+    bulk.Area = 2.0 * PI * reactorRadius * reactorLength +
+        2.0 * PI * reactorRadius * reactorRadius;
+    bulk.substrateArea = 0.01;
+    bulk.pressureMtorr = 10.0;
+    bulk.gasTemp = gasTemp;
+    bulk.Pabs = 700.0 * 0.3;
+    bulk.biasPower = 200.0;
+    bulk.biasFrequency = 2.0e6;
+    bulk.biasVoltageGuess = 100.0;
+    bulk.residualVoltageRipple = 20.0;
+    bulk.sheathPoints = 240;
+    bulk.sheathIterations = 20;
+    bulk.ionCount = 5000;
+    bulk.ionDt = 1e-9;
+    bulk.maxCycles = 20;
+    bulk.enableChargeExchange = true;
+    bulk.enableMomentumTransfer = true;
+    bulk.chargeExchangeScale = 0.1;
+    bulk.momentumTransferScale = 1.0;
+    bulk.useBias = true;
+    bulk.motherNeutralFlowSccm = {
+        {"Ar", 40.0},
+        {"C4F8", 200.0}
+    };
+
+    const double pressurePa = bulk.pressureMtorr * 0.133322;
+    const double totalFlowSccm = 240.0;
+    const double totalGasDensity = pressurePa / (K_B * bulk.gasTemp);
+    for (const auto& species : Species)
+        bulk.densities[species.first] = species.second.charge == 0 ? 1.0 : 0.0;
+
+    bulk.densities["Ar"] = totalGasDensity * (40.0 / totalFlowSccm);
+    bulk.densities["C4F8"] = totalGasDensity * (200.0 / totalFlowSccm);
+    bulk.densities["CF3+"] = 2.0e18;
+    bulk.densities["CF2+"] = 2.0e18;
+    bulk.densities["Ar+"] = 2.0e18;
+    bulk.densities["e-"] = 2.0e18;
+    bulk.Ngas = totalGasDensity;
+
+    const double ndotTotal = totalFlowSccm * SCCM_TO_PARTICLES_PER_SECOND;
+    bulk.pump = (ndotTotal * K_B * bulk.gasTemp / pressurePa) /
+        std::max(bulk.Volume, 1e-30);
+
+    bulk.reactions =
+    {
+        {
+            "r11_Ar",
+            11.6,
+            6.033e-15, 0.3287, 12.08,
+            {{"Ar",1},{"e-",1}},
+            {{"Ar*",1},{"e-",1}}
+        },
+        {
+            "r12_Ar",
+            15.76,
+            2.160e-14, 0.6329, 16.0627,
+            {{"Ar",1},{"e-",1}},
+            {{"Ar+",1},{"e-",2}}
+        },
+        {
+            "r13_Ar",
+            4.43,
+            1.698e-13, 0.1072, 4.4129,
+            {{"Ar*",1},{"e-",1}},
+            {{"Ar+",1},{"e-",2}}
+        },
+        {
+            "r14_Ar",
+            -11.6,
+            3.969e-15, 0.2894, 0.7412,
+            {{"Ar*",1},{"e-",1}},
+            {{"Ar",1},{"e-",1}}
+        },
+        {
+            "r15_Ar",
+            0.0,
+            1.20e-15, 0.0, 0.0,
+            {{"Ar*",2}},
+            {{"Ar+",1},{"Ar",1},{"e-",1}}
+        },
+        {
+            "r2_CF4",
+            0.15,
+            3.26e-14, -0.317, 0.230,
+            {{"CF4",1},{"e-",1}},
+            {{"CF4*",1},{"e-",1}}
+        },
+        {
+            "r2_C4F8",
+            17.0,
+            5.70e-14, 0.470, 17.480,
+            {{"C4F8",1},{"e-",1}},
+            {{"C2F4+",1},{"C2F4",1},{"e-",2}}
+        },
+        {
+            "r3_C4F8",
+            2.42,
+            9.58e-14, 0.042, 8.572,
+            {{"C4F8",1},{"e-",1}},
+            {{"C2F4",2},{"e-",1}}
+        },
+        {
+            "r4_C2F4",
+            3.06,
+            1.32e-15, 0.412, 6.329,
+            {{"C2F4",1},{"e-",1}},
+            {{"CF2",2},{"e-",1}}
+        },
+        {
+            "r5_CF3",
+            10.0,
+            1.36e-15, 0.796, 9.057,
+            {{"CF3",1},{"e-",1}},
+            {{"CF3+",1},{"e-",2}}
+        },
+        {
+            "r6_CF3",
+            9.0,
+            1.0e-16, 0.0, 0.0,
+            {{"CF3",1},{"e-",1}},
+            {{"CF2",1},{"F-",1}}
+        },
+        {
+            "r7_CF2",
+            10.0,
+            1.10e-14, 0.393, 11.370,
+            {{"CF2",1},{"e-",1}},
+            {{"CF2+",1},{"e-",2}}
+        },
+        {
+            "r8_Fm",
+            13.0,
+            6.27e-14, 0.193, 12.918,
+            {{"F-",1},{"e-",1}},
+            {{"F",1},{"e-",2}}
+        },
+        {
+            "r9_CF2F",
+            0.0,
+            1.40e-20, 0.0, 0.0,
+            {{"CF2",1},{"F",1}},
+            {{"CF3",1}}
+        },
+        {
+            "r10_CF3F",
+            0.0,
+            2.32e-18, 0.0, 0.0,
+            {{"CF3",1},{"F",1}},
+            {{"CF4",1}}
+        }
+    };
 }
 
 void advanceModel(BulkModel& bulk)
@@ -318,7 +484,7 @@ void advanceModelForDuration(BulkModel& bulk)
     if (bulk.dt <= 0.0 || bulk.duration <= 0.0)
         return;
 
-    constexpr std::uint64_t maxStartupSteps = 10000;
+    constexpr std::uint64_t maxStartupSteps = 100000;
     const auto requestedSteps = static_cast<std::uint64_t>(std::ceil(bulk.duration / bulk.dt));
     const auto steps = std::min(requestedSteps, maxStartupSteps);
 
@@ -342,10 +508,16 @@ void initializeSheath(BulkModel& bulk, Sheath& sheath)
     const double M_eff = effectiveIonMassDensityWeighted(bulk);
     const double JiBulk = std::max(totalIonCurrentDensity(bulk, Te), 0.0);
     const double IiTotal = JiBulk * bulk.substrateArea;
-    const double Imax = bulk.useBias
-        ? 2.0 * bulk.biasPower / std::max(bulk.biasVoltageGuess, 1e-3)
-        : 0.0;
     const double vScale = bulk.useBias ? bulk.biasVoltageGuess : bulk.residualVoltageRipple;
+    const double electronSatCurrent =
+        E_CHARGE * electronThermalSpeed(Te) * ne * bulk.substrateArea / 4.0;
+    const double floatingVoltage = Te * std::log(
+        std::max(IiTotal, 1e-30) / std::max(electronSatCurrent, 1e-30));
+    const double meanDrop = std::max(std::abs(floatingVoltage) + std::abs(vScale), 1.0);
+    const double rfRipple = bulk.useBias ? 0.30 * std::abs(vScale) : 0.50 * std::abs(vScale);
+    const double factor = (4.0 * EPS0 / 9.0) *
+        std::sqrt(2.0 * E_CHARGE / M_eff);
+    const double JiForSheath = std::max(JiBulk, 1e-30);
 
     sheath.time.resize(points);
     sheath.voltageWaveform.resize(points);
@@ -354,57 +526,14 @@ void initializeSheath(BulkModel& bulk, Sheath& sheath)
     for (int i = 0; i < points; ++i)
     {
         const double t = i * dt;
+        const double phase = std::sin(2.0 * PI * bulk.biasFrequency * t);
+        const double VsAbs = std::max(meanDrop + rfRipple * phase, 1.0);
         sheath.time[i] = t;
-        sheath.voltageWaveform[i] =
-            -vScale * (1.0 + 0.3 * std::sin(2.0 * PI * bulk.biasFrequency * t));
-        sheath.thicknessWaveform[i] =
-            150e-6 * (1.0 + 0.2 * std::sin(2.0 * PI * bulk.biasFrequency * t));
-    }
-
-    for (int it = 0; it < bulk.sheathIterations; ++it)
-    {
-        for (int i = 0; i < points; ++i)
-        {
-            const double phi = clampValue(
-                sheath.voltageWaveform[i] / Te,
-                -45.0,
-                45.0);
-            const double VsAbs = std::max(std::abs(phi * Te), 1.0);
-            const double uB = bohmSpeed(Te, M_eff);
-            const double Ji = std::max(E_CHARGE * ne * uB, 1e-30);
-            const double factor = (4.0 * EPS0 / 9.0) *
-                std::sqrt(E_CHARGE / (2.0 * M_eff));
-            sheath.thicknessWaveform[i] = clampValue(
-                std::sqrt(factor * std::pow(VsAbs, 1.5) / Ji),
-                1e-6,
-                5e-3);
-        }
-
-        std::vector<double> solved(points, sheath.voltageWaveform.front());
-        double V = sheath.voltageWaveform.front();
-        for (int i = 1; i < points; ++i)
-        {
-            const double t0 = sheath.time[i - 1];
-            const double k1 = sheathCircuitRhs(
-                t0, V, sheath.time, sheath.thicknessWaveform, Te, ne, IiTotal, Imax, bulk);
-            const double k2 = sheathCircuitRhs(
-                t0 + 0.5 * dt, V + 0.5 * dt * k1,
-                sheath.time, sheath.thicknessWaveform, Te, ne, IiTotal, Imax, bulk);
-            const double k3 = sheathCircuitRhs(
-                t0 + 0.5 * dt, V + 0.5 * dt * k2,
-                sheath.time, sheath.thicknessWaveform, Te, ne, IiTotal, Imax, bulk);
-            const double k4 = sheathCircuitRhs(
-                t0 + dt, V + dt * k3,
-                sheath.time, sheath.thicknessWaveform, Te, ne, IiTotal, Imax, bulk);
-            V += (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
-            solved[i] = V;
-        }
-
-        for (int i = 0; i < points; ++i)
-        {
-            const int prev = (i + points - 1) % points;
-            sheath.voltageWaveform[i] = 0.5 * (solved[i] + solved[prev]);
-        }
+        sheath.voltageWaveform[i] = -VsAbs;
+        sheath.thicknessWaveform[i] = clampValue(
+            std::sqrt(factor * std::pow(VsAbs, 1.5) / JiForSheath),
+            1e-6,
+            5e-3);
     }
 
     sheath.voltage = static_cast<float>(
@@ -480,7 +609,7 @@ TransportResult transportSpecies(
                 ? bulk.momentumTransferScale * sigmaMT(Eion)
                 : 0.0;
             const double nuM = Ngas * sigMt * vrel;
-
+              
             v += (aE - nuM * v) * dt;
             v = std::max(v, 0.0);
             x -= v * dt;
