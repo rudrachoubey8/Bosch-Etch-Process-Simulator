@@ -1,6 +1,16 @@
 
 #include "stackSimulations.h"
 
+const std::vector<VoxelMaterialInfo>& stackSimulationMaterials()
+{
+    static const std::vector<VoxelMaterialInfo> materials = {
+        {0, "SiO2", 255, 105, 0},
+        {1, "Si3N4", 0, 255, 0},
+        {2, "Si", 128, 0, 128},
+        {3, "DX", 0, 255, 255}
+    };
+    return materials;
+}
 
 Simulation stackSimulation() {
     Simulation simulation(

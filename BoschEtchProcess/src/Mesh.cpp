@@ -1,8 +1,12 @@
 #include "Mesh.h"
+#include "stackSimulations.h"
+
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 // ---------- helper ----------
 static GLuint loadComputeProgram(const char* path) {
     std::ifstream file(path);
@@ -187,6 +191,29 @@ void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int 
 
     glUseProgram(computeProgram);
 
+    std::vector<float> materialColors(16 * 3, 1.0f);
+    int materialColorCount = 0;
+    for (const VoxelMaterialInfo& material : stackSimulationMaterials())
+    {
+        if (material.type < 0 || material.type >= 16)
+            continue;
+
+        materialColors[material.type * 3 + 0] = material.r / 255.0f;
+        materialColors[material.type * 3 + 1] = material.g / 255.0f;
+        materialColors[material.type * 3 + 2] = material.b / 255.0f;
+        materialColorCount = std::max(materialColorCount, material.type + 1);
+    }
+
+    glUniform1i(
+        glGetUniformLocation(computeProgram, "materialColorCount"),
+        materialColorCount
+    );
+    glUniform3fv(
+        glGetUniformLocation(computeProgram, "materialColors"),
+        16,
+        materialColors.data()
+    );
+
     glUniform3i(
         glGetUniformLocation(computeProgram, "gridSize"),
         grid.X, grid.Y, grid.Z
@@ -292,3 +319,4 @@ void Mesh::draw()
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
+

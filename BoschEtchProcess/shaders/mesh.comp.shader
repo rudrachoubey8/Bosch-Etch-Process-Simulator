@@ -19,6 +19,8 @@ uniform vec3 center;
 uniform ivec2 tileOffset;
 uniform vec3 rayOrigin;
 uniform mat3 viewMatrix;
+uniform int materialColorCount;
+uniform vec3 materialColors[16];
 
 uniform ivec2 slice;
 
@@ -47,10 +49,8 @@ int typeAt(int x, int y, int z)
 
 vec3 colorFromType(int t)
 {
-    if (t == 0) return vec3(1.0, 0.647, 0.0);
-    if (t == 1) return vec3(0.0, 1.0, 0.0);
-    if (t == 2) return vec3(0.5, 0.0, 0.5);
-    if (t == 3) return vec3(0.0, 1.0, 1.0);
+    if (t >= 0 && t < materialColorCount && t < 16)
+        return materialColors[t];
     return vec3(1.0);
 }
 

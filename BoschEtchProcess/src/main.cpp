@@ -272,6 +272,47 @@ namespace
         makeMonoEnergy(particle);
         return particle;
     }
+
+    const VoxelMaterialInfo* findStackMaterial(int type)
+    {
+        const auto& materials = stackSimulationMaterials();
+        const auto it = std::find_if(
+            materials.begin(),
+            materials.end(),
+            [type](const VoxelMaterialInfo& material)
+            {
+                return material.type == type;
+            });
+
+        return it == materials.end() ? nullptr : &(*it);
+    }
+
+    ImVec4 materialColor(const VoxelMaterialInfo& material)
+    {
+        return ImVec4(
+            material.r / 255.0f,
+            material.g / 255.0f,
+            material.b / 255.0f,
+            1.0f);
+    }
+
+    uint32_t rgbaPixel(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
+    {
+        return
+            static_cast<uint32_t>(r) |
+            (static_cast<uint32_t>(g) << 8) |
+            (static_cast<uint32_t>(b) << 16) |
+            (static_cast<uint32_t>(a) << 24);
+    }
+
+    uint32_t materialPixel(int type)
+    {
+        const VoxelMaterialInfo* material = findStackMaterial(type);
+        if (!material)
+            return rgbaPixel(255, 255, 255);
+
+        return rgbaPixel(material->r, material->g, material->b);
+    }
 }
 
 // ---------------- RANDOM --------------------------
@@ -1572,6 +1613,19 @@ void renderMesh(Simulation& simulation) {
             ImGui::TextColored(ImVec4(0, 0, 1, 1), "Y Axis");
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "Z Axis");
 
+            ImGui::Separator();
+            ImGui::Text("Materials:");
+
+            for (const VoxelMaterialInfo& material : stackSimulationMaterials())
+            {
+                ImGui::ColorButton(
+                    material.name.c_str(),
+                    materialColor(material),
+                    ImGuiColorEditFlags_NoTooltip,
+                    ImVec2(18.0f, 18.0f));
+                ImGui::SameLine();
+                ImGui::Text("%d: %s", material.type, material.name.c_str());
+            }
 
             ImGui::End();
 
@@ -1617,28 +1671,9 @@ void renderMesh(Simulation& simulation) {
 
                     for (int i = 0; i < pixels.size(); i++)
                     {
-                        switch (slice[i])
-                        {
-                        case -1:
-                            pixels[i] = 0xFF000000;
-                            break;
-
-                        case 0:
-                            pixels[i] = 0xFFFFFFFF;
-                            break;
-
-                        case 1:
-                            pixels[i] = 0xFFFF0000;
-                            break;
-
-                        case 2:
-                            pixels[i] = 0xFF00FF00;
-                            break;
-
-                        default:
-                            pixels[i] = 0xFF0000FF;
-                            break;
-                        }
+                        pixels[i] = slice[i] < 0
+                            ? rgbaPixel(0, 0, 0)
+                            : materialPixel(slice[i]);
                     }
 
                     // Update texture
