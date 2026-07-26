@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include <windows.h>
+#include <wincodec.h>
 #include <iostream>
 #include <random>
 #include <cmath>
@@ -7,6 +8,9 @@
 #include <fstream>
 #include <algorithm>
 #include <cfloat>
+#include <cctype>
+#include <cstring>
+#include <utility>
 
 
 #include "shader.h"
@@ -32,7 +36,9 @@ using namespace std;
 namespace
 {
     constexpr uint32_t PARTICLE_DATA_MAGIC = 0x42504550;
-    constexpr uint32_t PARTICLE_DATA_VERSION = 2;
+    constexpr uint32_t PARTICLE_DATA_VERSION = 4;
+    constexpr uint32_t MATERIAL_DATA_MAGIC = 0x42504D54;
+    constexpr uint32_t MATERIAL_DATA_VERSION = 1;
     constexpr uint32_t MAX_SERIALIZED_ITEMS = 1000000;
 
     template <typename T>
@@ -102,6 +108,8 @@ namespace
             writeValue(out, draw) &&
             writeValue(out, custom) &&
             writeValue(out, particle.interval) &&
+            writeValue(out, particle.releaseDuration) &&
+            writeValue(out, particle.depositVoxelType) &&
             writeString(out, particle.name) &&
             writeFloatVector(out, particle.iedf.energyCenters) &&
             writeFloatVector(out, particle.iedf.pdf);
@@ -125,15 +133,97 @@ namespace
             return false;
 
         if (!readValue(in, particle.interval) ||
+            (version >= 3 && !readValue(in, particle.releaseDuration)) ||
+            (version >= 4 && !readValue(in, particle.depositVoxelType)) ||
             !readString(in, particle.name) ||
             !readFloatVector(in, particle.iedf.energyCenters) ||
             !readFloatVector(in, particle.iedf.pdf))
             return false;
 
+        if (version < 3)
+            particle.releaseDuration = particle.interval;
+        if (version < 4)
+            particle.depositVoxelType = 3;
+
         particle.deposit = deposit != 0;
         particle.draw = draw != 0;
         particle.custom = custom != 0;
         return particle.iedf.energyCenters.size() == particle.iedf.pdf.size();
+    }
+
+    bool writeMaterialInfo(std::ostream& out, const VoxelMaterialInfo& material)
+    {
+        return
+            writeValue(out, material.type) &&
+            writeString(out, material.name) &&
+            writeValue(out, material.r) &&
+            writeValue(out, material.g) &&
+            writeValue(out, material.b) &&
+            writeValue(out, material.threshold) &&
+            writeValue(out, material.depositThreshold) &&
+            writeValue(out, material.solid);
+    }
+
+    bool readMaterialInfo(std::istream& in, VoxelMaterialInfo& material, uint32_t version)
+    {
+        if (version != 1)
+            return false;
+
+        return
+            readValue(in, material.type) &&
+            readString(in, material.name) &&
+            readValue(in, material.r) &&
+            readValue(in, material.g) &&
+            readValue(in, material.b) &&
+            readValue(in, material.threshold) &&
+            readValue(in, material.depositThreshold) &&
+            readValue(in, material.solid);
+    }
+
+    void writeMaterialData(std::ostream& out)
+    {
+        const std::vector<VoxelMaterialInfo>& materials = stackSimulationMaterials();
+        writeValue(out, MATERIAL_DATA_MAGIC);
+        writeValue(out, MATERIAL_DATA_VERSION);
+        writeValue(out, static_cast<uint32_t>(materials.size()));
+
+        for (const VoxelMaterialInfo& material : materials)
+            writeMaterialInfo(out, material);
+    }
+
+    void tryReadMaterialData(std::istream& in)
+    {
+        uint32_t materialMagic = 0;
+        uint32_t materialVersion = 0;
+        uint32_t materialCount = 0;
+
+        if (!readValue(in, materialMagic))
+        {
+            in.clear();
+            return;
+        }
+
+        if (materialMagic != MATERIAL_DATA_MAGIC ||
+            !readValue(in, materialVersion) ||
+            !readValue(in, materialCount) ||
+            materialVersion != MATERIAL_DATA_VERSION ||
+            materialCount > MAX_SERIALIZED_ITEMS)
+        {
+            in.clear();
+            return;
+        }
+
+        std::vector<VoxelMaterialInfo> loadedMaterials(materialCount);
+        for (VoxelMaterialInfo& material : loadedMaterials)
+        {
+            if (!readMaterialInfo(in, material, materialVersion))
+            {
+                in.clear();
+                return;
+            }
+        }
+
+        stackSimulationMaterials() = std::move(loadedMaterials);
     }
 
     int probabilityIndex(
@@ -237,6 +327,7 @@ namespace
         particle.energy = properties.charge > 0 ? 50.0f : 5.0f;
         particle.halfAngle = properties.charge > 0 ? 20.0f : 60.0f;
         particle.interval = 10;
+        particle.depositVoxelType = 3;
         particle.deposit = false;
         particle.draw = true;
         particle.iedf.energyCenters = { particle.energy };
@@ -253,22 +344,24 @@ namespace
 
     ParticleTypeData makeFireableFromTemplate(
         const ParticleTypeData& source,
-        int duration)
+        int interval,
+        int releaseDuration)
     {
         ParticleTypeData particle = source;
         particle.custom = false;
-        particle.interval = std::max(duration, 1);
+        particle.interval = std::max(interval, 1);
+        particle.releaseDuration = std::max(releaseDuration, 1);
         return particle;
     }
 
     ParticleTypeData makeCustomParticle(
         const std::string& name,
         const SpeciesProperties& properties,
-        int duration)
+        int releaseDuration)
     {
         ParticleTypeData particle = makeSprayParticle(name, properties, 1e18);
         particle.custom = true;
-        particle.interval = std::max(duration, 1);
+        particle.releaseDuration = std::max(releaseDuration, 1);
         makeMonoEnergy(particle);
         return particle;
     }
@@ -296,6 +389,45 @@ namespace
             1.0f);
     }
 
+    const VoxelMaterialInfo* materialByListIndex(int index)
+    {
+        const auto& materials = stackSimulationMaterials();
+        if (index < 0 || index >= static_cast<int>(materials.size()))
+            return nullptr;
+
+        return &materials[index];
+    }
+
+    int materialListIndexForType(int type)
+    {
+        const auto& materials = stackSimulationMaterials();
+        for (int i = 0; i < static_cast<int>(materials.size()); ++i)
+        {
+            if (materials[i].type == type)
+                return i;
+        }
+
+        return materials.empty() ? -1 : 0;
+    }
+
+    void applyMaterialPropertiesToVoxels(
+        std::vector<Voxel>& voxels)
+    {
+        for (Voxel& voxel : voxels)
+        {
+            if (voxel.solid == 0)
+                continue;
+
+            const VoxelMaterialInfo* material = findStackMaterial(voxel.type);
+            if (!material)
+                continue;
+
+            voxel.solid = material->solid;
+            voxel.threshold = material->threshold;
+            voxel.depositThreshold = material->depositThreshold;
+        }
+    }
+
     uint32_t rgbaPixel(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
     {
         return
@@ -312,6 +444,179 @@ namespace
             return rgbaPixel(255, 255, 255);
 
         return rgbaPixel(material->r, material->g, material->b);
+    }
+
+    bool writeIedfCsv(const char* path, const ParticleTypeData& particle)
+    {
+        std::ofstream out(path);
+        if (!out)
+            return false;
+
+        out << "energy_eV,ion_flux_mol_m-2_s-1_eV-1\n";
+        const std::size_t count = std::min(
+            particle.iedf.energyCenters.size(),
+            particle.iedf.pdf.size());
+        for (std::size_t i = 0; i < count; ++i)
+            out << particle.iedf.energyCenters[i] << ',' << particle.iedf.pdf[i] << '\n';
+
+        return true;
+    }
+
+    bool writeSliceCsv(
+        const char* path,
+        int width,
+        int height,
+        const std::vector<int>& slice)
+    {
+        if (width <= 0 || height <= 0 || slice.size() < static_cast<std::size_t>(width * height))
+            return false;
+
+        std::ofstream out(path);
+        if (!out)
+            return false;
+
+        out << "x,y,voxel_type,material\n";
+        for (int y = 0; y < height; ++y)
+        {
+            for (int x = 0; x < width; ++x)
+            {
+                const int type = slice[x + y * width];
+                const VoxelMaterialInfo* material = findStackMaterial(type);
+                out << x << ',' << y << ',' << type << ','
+                    << (material ? material->name : "Void") << '\n';
+            }
+        }
+
+        return true;
+    }
+
+    std::string lowercaseExtension(const char* path)
+    {
+        std::string value(path ? path : "");
+        const std::size_t dot = value.find_last_of('.');
+        if (dot == std::string::npos)
+            return ".png";
+
+        std::string ext = value.substr(dot);
+        for (char& ch : ext)
+            ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        return ext;
+    }
+
+    std::wstring widenPath(const char* path)
+    {
+        if (!path || !*path)
+            return L"slice.png";
+
+        const int size = MultiByteToWideChar(CP_UTF8, 0, path, -1, nullptr, 0);
+        if (size <= 0)
+            return L"slice.png";
+
+        std::wstring wide(static_cast<std::size_t>(size - 1), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, path, -1, wide.data(), size);
+        return wide;
+    }
+
+    bool writeSliceImage(
+        const char* path,
+        int width,
+        int height,
+        const std::vector<uint32_t>& pixels)
+    {
+        if (width <= 0 || height <= 0 || pixels.size() < static_cast<std::size_t>(width * height))
+            return false;
+
+        const std::string ext = lowercaseExtension(path);
+        const GUID containerFormat =
+            (ext == ".jpg" || ext == ".jpeg") ? GUID_ContainerFormatJpeg :
+            (ext == ".png") ? GUID_ContainerFormatPng :
+            GUID_NULL;
+        if (IsEqualGUID(containerFormat, GUID_NULL))
+            return false;
+
+        std::vector<uint8_t> bgr(static_cast<std::size_t>(width * height * 3));
+        for (int i = 0; i < width * height; ++i)
+        {
+            const uint32_t pixel = pixels[i];
+            bgr[static_cast<std::size_t>(i * 3 + 0)] = static_cast<uint8_t>((pixel >> 16) & 0xFF);
+            bgr[static_cast<std::size_t>(i * 3 + 1)] = static_cast<uint8_t>((pixel >> 8) & 0xFF);
+            bgr[static_cast<std::size_t>(i * 3 + 2)] = static_cast<uint8_t>(pixel & 0xFF);
+        }
+
+        const HRESULT initHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const bool uninitCom = SUCCEEDED(initHr);
+        if (FAILED(initHr) && initHr != RPC_E_CHANGED_MODE)
+            return false;
+
+        IWICImagingFactory* factory = nullptr;
+        IWICBitmapEncoder* encoder = nullptr;
+        IWICBitmapFrameEncode* frame = nullptr;
+        IWICStream* stream = nullptr;
+        IPropertyBag2* options = nullptr;
+        bool ok = false;
+
+        HRESULT hr = CoCreateInstance(
+            CLSID_WICImagingFactory,
+            nullptr,
+            CLSCTX_INPROC_SERVER,
+            IID_PPV_ARGS(&factory));
+
+        if (SUCCEEDED(hr))
+            hr = factory->CreateStream(&stream);
+        const std::wstring widePath = widenPath(path);
+        if (SUCCEEDED(hr))
+            hr = stream->InitializeFromFilename(widePath.c_str(), GENERIC_WRITE);
+        if (SUCCEEDED(hr))
+            hr = factory->CreateEncoder(containerFormat, nullptr, &encoder);
+        if (SUCCEEDED(hr))
+            hr = encoder->Initialize(stream, WICBitmapEncoderNoCache);
+        if (SUCCEEDED(hr))
+            hr = encoder->CreateNewFrame(&frame, &options);
+        if (SUCCEEDED(hr))
+            hr = frame->Initialize(options);
+        if (SUCCEEDED(hr))
+            hr = frame->SetSize(static_cast<UINT>(width), static_cast<UINT>(height));
+        WICPixelFormatGUID format = GUID_WICPixelFormat24bppBGR;
+        if (SUCCEEDED(hr))
+            hr = frame->SetPixelFormat(&format);
+        if (SUCCEEDED(hr) && !IsEqualGUID(format, GUID_WICPixelFormat24bppBGR))
+            hr = E_FAIL;
+        if (SUCCEEDED(hr))
+            hr = frame->WritePixels(
+                static_cast<UINT>(height),
+                static_cast<UINT>(width * 3),
+                static_cast<UINT>(bgr.size()),
+                bgr.data());
+        if (SUCCEEDED(hr))
+            hr = frame->Commit();
+        if (SUCCEEDED(hr))
+            hr = encoder->Commit();
+
+        ok = SUCCEEDED(hr);
+
+        if (options)
+            options->Release();
+        if (frame)
+            frame->Release();
+        if (encoder)
+            encoder->Release();
+        if (stream)
+            stream->Release();
+        if (factory)
+            factory->Release();
+        if (uninitCom)
+            CoUninitialize();
+
+        return ok;
+    }
+
+    int maxSliceIndexForDirection(int sliceDir)
+    {
+        if (sliceDir == 0)
+            return Settings::Z - 1;
+        if (sliceDir == 1)
+            return Settings::Y - 1;
+        return Settings::X - 1;
     }
 }
 
@@ -490,11 +795,17 @@ void renderMesh(Simulation& simulation) {
     
     int typesOfParticles = 4;
     char fileName2[256] = "slice.txt";
+    char sliceCsvFilename[256] = "slice.csv";
+    char sliceImageFilename[256] = "slice.png";
+    char iedfCsvFilename[256] = "iedf.csv";
     int sliceDir = 2;     // 0=XY, 1=XZ, 2=YZ
     int sliceIndex = 0;
+    bool showRenderSlice = false;
 
     int previewWidth = 0;
     int previewHeight = 0;
+    std::vector<int> lastSlice;
+    std::vector<uint32_t> lastSlicePixels;
     GLuint sliceTexture;
 
     glGenTextures(1, &sliceTexture);
@@ -558,7 +869,7 @@ void renderMesh(Simulation& simulation) {
 
     vector<ParticleTypeData> particleDataTypes = generateParticles(bulk, sheath);
     for (ParticleTypeData& particle : particleDataTypes)
-        particle.interval = duration;
+        particle.releaseDuration = duration;
     
     vector<ParticleTypeData> plasmaParticleTemplates = particleDataTypes;
     typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
@@ -726,14 +1037,17 @@ void renderMesh(Simulation& simulation) {
                 plasmaParticleTemplates = generateParticles(bulk, sheath);
             
                 for (ParticleTypeData& particle : plasmaParticleTemplates)
-                    particle.interval = duration;
+                    particle.releaseDuration = duration;
 
                 for (ParticleTypeData& fireable : particleDataTypes)
                 {
                     if (fireable.custom)
                         continue;
 
-                    const int savedDuration = fireable.interval;
+                    const int savedInterval = fireable.interval;
+                    const int savedReleaseDuration = fireable.releaseDuration;
+                    const bool savedDeposit = fireable.deposit;
+                    const int savedDepositVoxelType = fireable.depositVoxelType;
                     auto matchingTemplate = std::find_if(
                         plasmaParticleTemplates.begin(),
                         plasmaParticleTemplates.end(),
@@ -744,7 +1058,12 @@ void renderMesh(Simulation& simulation) {
 
                     if (matchingTemplate != plasmaParticleTemplates.end())
                     {
-                        fireable = makeFireableFromTemplate(*matchingTemplate, savedDuration);
+                        fireable = makeFireableFromTemplate(
+                            *matchingTemplate,
+                            savedInterval,
+                            savedReleaseDuration);
+                        fireable.deposit = savedDeposit;
+                        fireable.depositVoxelType = savedDepositVoxelType;
                     }
                 }
 
@@ -759,7 +1078,8 @@ void renderMesh(Simulation& simulation) {
                         });
 
                     if (!alreadyFireable)
-                        particleDataTypes.push_back(makeFireableFromTemplate(source, duration));
+                        particleDataTypes.push_back(
+                            makeFireableFromTemplate(source, source.interval, duration));
                 }
 
                 typesOfParticles = std::max(1, static_cast<int>(particleDataTypes.size()));
@@ -886,6 +1206,10 @@ void renderMesh(Simulation& simulation) {
                 const auto& x = particleDataTypes[selectedIEDF].iedf.energyCenters;
                 const auto& y = particleDataTypes[selectedIEDF].iedf.pdf;
 
+                ImGui::InputText("IEDF CSV", iedfCsvFilename, IM_ARRAYSIZE(iedfCsvFilename));
+                if (ImGui::Button("Download IEDF CSV"))
+                    writeIedfCsv(iedfCsvFilename, particleDataTypes[selectedIEDF]);
+
                 if (!x.empty() && !y.empty())
                 {
                     double width = x.size() > 1 ? (x[1] - x[0]) : 1.0;
@@ -958,6 +1282,7 @@ void renderMesh(Simulation& simulation) {
                     particleDataTypes.push_back(
                         makeFireableFromTemplate(
                             plasmaParticleTemplates[selectedTemplateParticle],
+                            plasmaParticleTemplates[selectedTemplateParticle].interval,
                             duration));
                     typesOfParticles = std::max(1, (int) particleDataTypes.size());
                     rebuildProbabilityGrid(
@@ -1015,7 +1340,7 @@ void renderMesh(Simulation& simulation) {
 
             if (ImGui::BeginTable(
                 "FireableParticles",
-                10,
+                12,
                 ImGuiTableFlags_Borders |
                 ImGuiTableFlags_RowBg |
                 ImGuiTableFlags_Resizable |
@@ -1025,10 +1350,12 @@ void renderMesh(Simulation& simulation) {
                 ImGui::TableSetupColumn("Source");
                 ImGui::TableSetupColumn("Custom");
                 ImGui::TableSetupColumn("Release Interval");
+                ImGui::TableSetupColumn("Release Duration");
                 ImGui::TableSetupColumn("Count");
                 ImGui::TableSetupColumn("Energy");
                 ImGui::TableSetupColumn("Angle");
                 ImGui::TableSetupColumn("Deposit");
+                ImGui::TableSetupColumn("Deposit Voxel");
                 ImGui::TableSetupColumn("IEDF Bins");
                 ImGui::TableSetupColumn("Remove");
                 ImGui::TableHeadersRow();
@@ -1069,10 +1396,16 @@ void renderMesh(Simulation& simulation) {
                                 const bool selected = sourceIndex == currentTemplate;
                                 if (ImGui::Selectable(plasmaParticleTemplates[sourceIndex].name.c_str(), selected))
                                 {
-                                    const int savedDuration = particle.interval;
+                                    const int savedInterval = particle.interval;
+                                    const int savedReleaseDuration = particle.releaseDuration;
+                                    const bool savedDeposit = particle.deposit;
+                                    const int savedDepositVoxelType = particle.depositVoxelType;
                                     particle = makeFireableFromTemplate(
                                         plasmaParticleTemplates[sourceIndex],
-                                        savedDuration);
+                                        savedInterval,
+                                        savedReleaseDuration);
+                                    particle.deposit = savedDeposit;
+                                    particle.depositVoxelType = savedDepositVoxelType;
                                 }
                                 if (selected)
                                     ImGui::SetItemDefaultFocus();
@@ -1092,7 +1425,10 @@ void renderMesh(Simulation& simulation) {
                         }
                         else
                         {
-                            const int savedDuration = particle.interval;
+                            const int savedInterval = particle.interval;
+                            const int savedReleaseDuration = particle.releaseDuration;
+                            const bool savedDeposit = particle.deposit;
+                            const int savedDepositVoxelType = particle.depositVoxelType;
                             auto matchingTemplate = std::find_if(
                                 plasmaParticleTemplates.begin(),
                                 plasmaParticleTemplates.end(),
@@ -1101,7 +1437,14 @@ void renderMesh(Simulation& simulation) {
                                     return source.name == particle.name;
                                 });
                             if (matchingTemplate != plasmaParticleTemplates.end())
-                                particle = makeFireableFromTemplate(*matchingTemplate, savedDuration);
+                            {
+                                particle = makeFireableFromTemplate(
+                                    *matchingTemplate,
+                                    savedInterval,
+                                    savedReleaseDuration);
+                                particle.deposit = savedDeposit;
+                                particle.depositVoxelType = savedDepositVoxelType;
+                            }
                             else
                                 particle.custom = true;
                         }
@@ -1113,6 +1456,11 @@ void renderMesh(Simulation& simulation) {
                     particle.interval = std::clamp(particle.interval, 1, 1000000);
 
                     ImGui::TableSetColumnIndex(4);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::InputInt("##releaseDuration", &particle.releaseDuration);
+                    particle.releaseDuration = std::clamp(particle.releaseDuration, 1, 1000000);
+
+                    ImGui::TableSetColumnIndex(5);
                     if (particle.custom)
                     {
                         ImGui::SetNextItemWidth(-FLT_MIN);
@@ -1124,7 +1472,7 @@ void renderMesh(Simulation& simulation) {
                         ImGui::Text("%d", particle.count);
                     }
 
-                    ImGui::TableSetColumnIndex(5);
+                    ImGui::TableSetColumnIndex(6);
                     if (particle.custom)
                     {
                         ImGui::SetNextItemWidth(-FLT_MIN);
@@ -1136,7 +1484,7 @@ void renderMesh(Simulation& simulation) {
                         ImGui::Text("%.3f", particle.energy);
                     }
 
-                    ImGui::TableSetColumnIndex(6);
+                    ImGui::TableSetColumnIndex(7);
                     if (particle.custom)
                     {
                         ImGui::SetNextItemWidth(-FLT_MIN);
@@ -1148,20 +1496,49 @@ void renderMesh(Simulation& simulation) {
                         ImGui::Text("%.1f", particle.halfAngle);
                     }
 
-                    ImGui::TableSetColumnIndex(7);
-                    if (particle.custom)
+                    ImGui::TableSetColumnIndex(8);
+                    ImGui::Checkbox("##deposit", &particle.deposit);
+
+                    ImGui::TableSetColumnIndex(9);
+                    if (particle.deposit)
                     {
-                        ImGui::Checkbox("##deposit", &particle.deposit);
+                        int materialIndex = materialListIndexForType(particle.depositVoxelType);
+                        const VoxelMaterialInfo* selectedMaterial = materialByListIndex(materialIndex);
+                        const char* selectedName = selectedMaterial ? selectedMaterial->name.c_str() : "None";
+
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        if (ImGui::BeginCombo("##depositVoxel", selectedName))
+                        {
+                            const auto& materials = stackSimulationMaterials();
+                            for (int materialListIndex = 0;
+                                materialListIndex < static_cast<int>(materials.size());
+                                ++materialListIndex)
+                            {
+                                const VoxelMaterialInfo& material = materials[materialListIndex];
+                                const bool selected = material.type == particle.depositVoxelType;
+                                std::string label =
+                                    std::to_string(material.type) +
+                                    ": " +
+                                    material.name;
+
+                                if (ImGui::Selectable(label.c_str(), selected))
+                                    particle.depositVoxelType = material.type;
+
+                                if (selected)
+                                    ImGui::SetItemDefaultFocus();
+                            }
+                            ImGui::EndCombo();
+                        }
                     }
                     else
                     {
-                        ImGui::Text("%s", particle.deposit ? "Yes" : "No");
+                        ImGui::Text("-");
                     }
 
-                    ImGui::TableSetColumnIndex(8);
+                    ImGui::TableSetColumnIndex(10);
                     ImGui::Text("%d", static_cast<int>(particle.iedf.pdf.size()));
 
-                    ImGui::TableSetColumnIndex(9);
+                    ImGui::TableSetColumnIndex(11);
                     if (ImGui::Button("Remove"))
                         removeParticle = i;
 
@@ -1261,11 +1638,13 @@ void renderMesh(Simulation& simulation) {
                 frame = 0;
                 tickTime = 0;
 
-                simulation.uploadVoxels(v);
+                simulation.grid.voxels = v;
+                applyMaterialPropertiesToVoxels(simulation.grid.voxels);
+                simulation.uploadVoxels(simulation.grid.voxels);
 
                 mesh.initGPU();
                 mesh.setVoxelBuffer(simulation.voxelSSBO);
-                mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+                mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex, showRenderSlice);
                 forceMeshBuild = false;
             }
 
@@ -1322,6 +1701,8 @@ void renderMesh(Simulation& simulation) {
                         (char*)gridData.data(),
                         gridSize * sizeof(float)
                     );
+
+                    writeMaterialData(out);
 
                     out.close();
 
@@ -1403,6 +1784,9 @@ void renderMesh(Simulation& simulation) {
                             validParticleData = static_cast<bool>(in);
                         }
 
+                        if (validParticleData)
+                            tryReadMaterialData(in);
+
                         if (!validParticleData)
                         {
                             std::cout
@@ -1420,7 +1804,7 @@ void renderMesh(Simulation& simulation) {
 
                             mesh.initGPU();
                             mesh.setVoxelBuffer(simulation.voxelSSBO);
-                            mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+                            mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex, showRenderSlice);
                             forceMeshBuild = false;
 
                             std::cout << "Loaded grid + settings from: "
@@ -1500,7 +1884,7 @@ void renderMesh(Simulation& simulation) {
                                 simulation.voxelSSBO
                             );
 
-                            mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+                            mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex, showRenderSlice);
 
                             std::cout
                                 << "Simulation loaded from "
@@ -1561,8 +1945,8 @@ void renderMesh(Simulation& simulation) {
                     {
                         for (int i = 0;i < particleDataTypes.size();i++)
                         {
-                            ParticleTypeData p = particleDataTypes[i];
-                            if (frame % p.interval == 0)
+                            const ParticleTypeData& p = particleDataTypes[i];
+                            if (frame <= p.releaseDuration && frame % p.interval == 0)
                             {
                                 simulation.uploadParticles(p, i);
                             }
@@ -1592,7 +1976,7 @@ void renderMesh(Simulation& simulation) {
                     std::abs(D - lastBuildDistance) > 0.0001f;
 
                 if (forceMeshBuild || cameraChanged || (!pause && frame % 10 == 0)) {
-                    mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex);
+                    mesh.buildMesh(rayOrigin, viewMatrix, sliceDir, sliceIndex, showRenderSlice);
                     lastBuildYaw = yaw;
                     lastBuildPitch = pitch;
                     lastBuildDistance = D;
@@ -1614,17 +1998,85 @@ void renderMesh(Simulation& simulation) {
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "Z Axis");
 
             ImGui::Separator();
-            ImGui::Text("Materials:");
+            ImGui::Text("Voxel Materials:");
 
-            for (const VoxelMaterialInfo& material : stackSimulationMaterials())
+            std::vector<VoxelMaterialInfo>& materials = stackSimulationMaterials();
+            if (ImGui::BeginTable(
+                "VoxelMaterialProperties",
+                7,
+                ImGuiTableFlags_Borders |
+                ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_Resizable |
+                ImGuiTableFlags_ScrollX))
             {
-                ImGui::ColorButton(
-                    material.name.c_str(),
-                    materialColor(material),
-                    ImGuiColorEditFlags_NoTooltip,
-                    ImVec2(18.0f, 18.0f));
-                ImGui::SameLine();
-                ImGui::Text("%d: %s", material.type, material.name.c_str());
+                ImGui::TableSetupColumn("Type");
+                ImGui::TableSetupColumn("Name");
+                ImGui::TableSetupColumn("Color");
+                ImGui::TableSetupColumn("Solid");
+                ImGui::TableSetupColumn("Threshold");
+                ImGui::TableSetupColumn("Deposit Threshold");
+                ImGui::TableSetupColumn("Preview");
+                ImGui::TableHeadersRow();
+
+                for (VoxelMaterialInfo& material : materials)
+                {
+                    ImGui::PushID(material.type);
+                    ImGui::TableNextRow();
+
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%d", material.type);
+
+                    ImGui::TableSetColumnIndex(1);
+                    char nameBuffer[64] = {};
+                    std::strncpy(nameBuffer, material.name.c_str(), sizeof(nameBuffer) - 1);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::InputText("##name", nameBuffer, sizeof(nameBuffer)))
+                        material.name = nameBuffer;
+
+                    ImGui::TableSetColumnIndex(2);
+                    float color[3] = {
+                        material.r / 255.0f,
+                        material.g / 255.0f,
+                        material.b / 255.0f
+                    };
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::ColorEdit3("##color", color, ImGuiColorEditFlags_NoInputs))
+                    {
+                        material.r = static_cast<uint8_t>(
+                            std::clamp(color[0], 0.0f, 1.0f) * 255.0f);
+                        material.g = static_cast<uint8_t>(
+                            std::clamp(color[1], 0.0f, 1.0f) * 255.0f);
+                        material.b = static_cast<uint8_t>(
+                            std::clamp(color[2], 0.0f, 1.0f) * 255.0f);
+                        forceMeshBuild = true;
+                    }
+
+                    ImGui::TableSetColumnIndex(3);
+                    bool solidMaterial = material.solid != 0;
+                    if (ImGui::Checkbox("##solid", &solidMaterial))
+                        material.solid = solidMaterial ? 1 : 0;
+
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::InputFloat("##threshold", &material.threshold);
+                    material.threshold = std::max(material.threshold, 0.0f);
+
+                    ImGui::TableSetColumnIndex(5);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::InputFloat("##depositThreshold", &material.depositThreshold);
+                    material.depositThreshold = std::max(material.depositThreshold, 0.0f);
+
+                    ImGui::TableSetColumnIndex(6);
+                    ImGui::ColorButton(
+                        "##preview",
+                        materialColor(material),
+                        ImGuiColorEditFlags_NoTooltip,
+                        ImVec2(18.0f, 18.0f));
+
+                    ImGui::PopID();
+                }
+
+                ImGui::EndTable();
             }
 
             ImGui::End();
@@ -1634,6 +2086,10 @@ void renderMesh(Simulation& simulation) {
             {
                 ImGui::InputText("File", fileName2, sizeof(fileName2));
 
+                const int previousSliceDir = sliceDir;
+                const int previousSliceIndex = sliceIndex;
+                const bool previousShowRenderSlice = showRenderSlice;
+
                 ImGui::Combo(
                     "Direction",
                     &sliceDir,
@@ -1641,11 +2097,21 @@ void renderMesh(Simulation& simulation) {
                 );
 
                 ImGui::InputInt("Slice Index", &sliceIndex);
+                const int sliceMax = maxSliceIndexForDirection(sliceDir);
+                sliceIndex = std::clamp(sliceIndex, 0, sliceMax);
+                ImGui::Text("Available range: 0 to %d", sliceMax);
+                ImGui::Checkbox("Show Cut In Render", &showRenderSlice);
+
+                if (previousSliceDir != sliceDir ||
+                    previousSliceIndex != sliceIndex ||
+                    previousShowRenderSlice != showRenderSlice)
+                {
+                    forceMeshBuild = true;
+                }
 
                 if (ImGui::Button("Extract Slice"))
                 {
-                    std::vector<int> slice =
-                        mesh.extractSlice(sliceDir, sliceIndex);
+                    lastSlice = mesh.extractSlice(sliceDir, sliceIndex);
 
                     switch (sliceDir)
                     {
@@ -1665,15 +2131,16 @@ void renderMesh(Simulation& simulation) {
                         break;
                     }
 
-                    std::vector<uint32_t> pixels(
-                        previewWidth * previewHeight
+                    lastSlicePixels.assign(
+                        previewWidth * previewHeight,
+                        rgbaPixel(0, 0, 0)
                     );
 
-                    for (int i = 0; i < pixels.size(); i++)
+                    for (int i = 0; i < lastSlicePixels.size() && i < lastSlice.size(); i++)
                     {
-                        pixels[i] = slice[i] < 0
+                        lastSlicePixels[i] = lastSlice[i] < 0
                             ? rgbaPixel(0, 0, 0)
-                            : materialPixel(slice[i]);
+                            : materialPixel(lastSlice[i]);
                     }
 
                     // Update texture
@@ -1688,7 +2155,7 @@ void renderMesh(Simulation& simulation) {
                         0,
                         GL_RGBA,
                         GL_UNSIGNED_BYTE,
-                        pixels.data()
+                        lastSlicePixels.data()
                     );
 
                     // Save slice to file
@@ -1705,7 +2172,7 @@ void renderMesh(Simulation& simulation) {
                         {
                             for (int x = 0; x < previewWidth; x++)
                             {
-                                out << slice[x + y * previewWidth];
+                                out << lastSlice[x + y * previewWidth];
 
                                 if (x != previewWidth - 1)
                                     out << ' ';
@@ -1722,6 +2189,14 @@ void renderMesh(Simulation& simulation) {
             ImGui::End();
 
             ImGui::Begin("Graph");
+            ImGui::InputText("Cross Section CSV", sliceCsvFilename, IM_ARRAYSIZE(sliceCsvFilename));
+            if (ImGui::Button("Download Cross Section CSV"))
+                writeSliceCsv(sliceCsvFilename, previewWidth, previewHeight, lastSlice);
+
+            ImGui::InputText("Slice Image (.png/.jpg)", sliceImageFilename, IM_ARRAYSIZE(sliceImageFilename));
+            if (ImGui::Button("Download Slice Image"))
+                writeSliceImage(sliceImageFilename, previewWidth, previewHeight, lastSlicePixels);
+
             if (previewWidth && previewHeight && ImPlot::BeginPlot("Slice"))
             {
                 ImPlot::SetupAxes(

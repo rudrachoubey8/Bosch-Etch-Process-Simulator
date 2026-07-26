@@ -23,6 +23,7 @@ uniform int materialColorCount;
 uniform vec3 materialColors[16];
 
 uniform ivec2 slice;
+uniform int showSlice;
 
 int idx(int x, int y, int z)
 {
@@ -127,17 +128,20 @@ bool ddaTrace(vec3 ro, vec3 rd, vec3 boxMin, float voxelSize, float tStart, floa
     else if (abs(entry.z - boxMin.z) < 0.001) face = ivec3(0, 0, -1);
     else if (abs(entry.z - (boxMin.z + float(gridSize.z) * voxelSize)) < 0.001) face = ivec3(0, 0, 1);
 
-    ivec3 range = ivec3(0);
-    if(slice.x == 0)      range = ivec3(gridSize.x, gridSize.y, slice.y);
-    else if(slice.x == 1) range = ivec3(gridSize.x, slice.y, gridSize.z);
-    else if(slice.x == 2) range = ivec3(slice.y, gridSize.y, gridSize.z);
-
     for (int i = 0; i < 1024; i++)
     {
         if (!inBounds(voxel.x, voxel.y, voxel.z)) break;
         if (t > tMax) break;
 
-        if (solidAt(voxel.x, voxel.y, voxel.z) == 1 && any(greaterThan(voxel, range)) == false)
+        int planeCoord = voxel.z;
+        if(slice.x == 1) planeCoord = voxel.y;
+        else if(slice.x == 2) planeCoord = voxel.x;
+
+        bool visibleInMode =
+            showSlice == 0 ||
+            planeCoord <= slice.y;
+
+        if (solidAt(voxel.x, voxel.y, voxel.z) == 1 && visibleInMode)
         {
             hitVoxel = voxel;
             hitT = t;
@@ -206,6 +210,12 @@ void main()
     vec3 hitPos    = ro + rd * hitT;
     vec3 hitNormal = normalize(vec3(hitFace));  
     vec3 baseColor = colorFromType(typeAt(hitVoxel.x, hitVoxel.y, hitVoxel.z));
+    int hitPlaneCoord = hitVoxel.z;
+    if(slice.x == 1) hitPlaneCoord = hitVoxel.y;
+    else if(slice.x == 2) hitPlaneCoord = hitVoxel.x;
+
+    if(showSlice != 0 && hitPlaneCoord == slice.y)
+        baseColor = mix(baseColor, vec3(1.0, 0.05, 0.03), 0.55);
 
     vec3 L        = normalize(rayOrigin - hitPos);
     float diffuse = max(dot(hitNormal, L), 0.0);

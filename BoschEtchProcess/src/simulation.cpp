@@ -1,5 +1,6 @@
 #include "simulation.h"
 #include "settings.h"
+#include "stackSimulations.h"
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -152,7 +153,7 @@ void Simulation::dispatchRayMarch(GLuint program, int particleCount, const std::
     
     glDispatchCompute(groups, 1, 1);
 
-    glMemoryBarrier(GL_ALL_BARRIER_BITS);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 
@@ -399,6 +400,12 @@ void Simulation::uploadParticles(
     glUniform1i(
         glGetUniformLocation(
             initParticlesProgram,
+            "depositVoxelType"),
+        p.depositVoxelType);
+
+    glUniform1i(
+        glGetUniformLocation(
+            initParticlesProgram,
             "type"),
         particleType);
 
@@ -487,6 +494,23 @@ void Simulation::dispatchHits(GLuint program) {
 
     glUseProgram(program);
     glUniform3i(glGetUniformLocation(program, "gridSize"), grid.X, grid.Y, grid.Z);
+
+    std::vector<float> voxelThresholds(16, 10000.0f);
+    std::vector<float> voxelDepositThresholds(16, 10000.0f);
+    int voxelTypeCount = 0;
+    for (const VoxelMaterialInfo& material : stackSimulationMaterials())
+    {
+        if (material.type < 0 || material.type >= 16)
+            continue;
+
+        voxelThresholds[material.type] = material.threshold;
+        voxelDepositThresholds[material.type] = material.depositThreshold;
+        voxelTypeCount = std::max(voxelTypeCount, material.type + 1);
+    }
+
+    glUniform1i(glGetUniformLocation(program, "voxelTypeCount"), voxelTypeCount);
+    glUniform1fv(glGetUniformLocation(program, "voxelThresholds"), 16, voxelThresholds.data());
+    glUniform1fv(glGetUniformLocation(program, "voxelDepositThresholds"), 16, voxelDepositThresholds.data());
 
     int groups = (hitCount + 255) / 256;
 

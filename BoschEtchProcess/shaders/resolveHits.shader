@@ -13,6 +13,7 @@ struct HitEvent {
     int cx, cy, cz;
     float damage;
     uint flags;
+    int depositVoxelType;
 };
 
 layout(std430, binding = 6) buffer VoxelBuffer {
@@ -28,6 +29,9 @@ layout(std430, binding = 8) readonly buffer HitCounter {
 };
 
 uniform ivec3 gridSize;
+uniform int voxelTypeCount;
+uniform float voxelThresholds[16];
+uniform float voxelDepositThresholds[16];
 
 int voxelIndex(ivec3 c)
 {
@@ -59,10 +63,11 @@ void main()
 
         if(v.depositThreshold <= 0.0)
         {
+            int materialType = clamp(h.depositVoxelType, 0, max(voxelTypeCount - 1, 0));
             v.solid = 1;
-            v.type = 3;
-            v.threshold = 10000;
-            v.depositThreshold = 10000;
+            v.type = materialType;
+            v.threshold = voxelThresholds[materialType];
+            v.depositThreshold = voxelDepositThresholds[materialType];
         }
     }
     else

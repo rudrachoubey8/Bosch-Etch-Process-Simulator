@@ -8,6 +8,7 @@ struct Particle {
     float x,y,z;
     float dx, dy, dz;
     int deposit;
+    int depositVoxelType;
     float speed;
     float energy;
     int type;
@@ -25,6 +26,7 @@ struct HitEvent {
     int cx, cy, cz;
     float damage;
     uint flags;
+    int depositVoxelType;
 };
 
 layout(std430, binding = 5) readonly buffer ParticleBuffer {
@@ -211,7 +213,8 @@ void main()
             bool reflectParticle =
                 (h / 4294967295.0f)
                 < (1.0 - reactionChance);
-            bool depositParticle = 
+            bool depositParticle =
+                p.deposit != 0 &&
                 (h / 4294967295.0f)
                 < (depositChance);
             bool adsorbParticle = 
@@ -308,6 +311,7 @@ void main()
                         damage;
 
                     hits[writeIdx].flags = 0u;
+                    hits[writeIdx].depositVoxelType = 0;
                 }
                 else
                 {
@@ -327,6 +331,7 @@ void main()
                         damage;
 
                     hits[writeIdx].flags = 1u;
+                    hits[writeIdx].depositVoxelType = p.depositVoxelType;
                 }
             }
 

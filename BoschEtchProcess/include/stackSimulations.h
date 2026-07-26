@@ -12,7 +12,10 @@ struct VoxelMaterialInfo
     uint8_t r;
     uint8_t g;
     uint8_t b;
+    float threshold;
+    float depositThreshold;
+    int solid;
 };
 
 Simulation stackSimulation();
-const std::vector<VoxelMaterialInfo>& stackSimulationMaterials();
+std::vector<VoxelMaterialInfo>& stackSimulationMaterials();

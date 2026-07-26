@@ -15,6 +15,7 @@ struct Particle
     float dz;
 
     int deposit;
+    int depositVoxelType;
 
     float speed;
     float energy;
@@ -50,6 +51,7 @@ uniform uint startIndex;
 uniform uint particleCount;
 
 uniform int deposit;
+uniform int depositVoxelType;
 uniform int type;
 
 uniform float cosTheta;
@@ -146,6 +148,7 @@ void main()
     particles[index].alive = 1;
 
     particles[index].deposit = deposit;
+    particles[index].depositVoxelType = depositVoxelType;
 
     particles[index].type = type;
 

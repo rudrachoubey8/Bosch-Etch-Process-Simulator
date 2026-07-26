@@ -177,7 +177,7 @@ void Mesh::initGPU() {
     sliceProgram = loadComputeProgram(path.c_str());
 
 }
-void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int sliceIndex) {
+void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int sliceIndex, bool showSlice) {
 
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, voxelCountSSBO);
@@ -242,6 +242,11 @@ void Mesh::buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int 
     glUniform2i(
         glGetUniformLocation(computeProgram, "slice"),
         sliceDir, sliceIndex
+    );
+
+    glUniform1i(
+        glGetUniformLocation(computeProgram, "showSlice"),
+        showSlice ? 1 : 0
     );
 
     // Project cuboid corners to screen space and find 2D AABB

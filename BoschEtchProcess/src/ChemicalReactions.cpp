@@ -508,7 +508,12 @@ void initializeSheath(BulkModel& bulk, Sheath& sheath)
     const double M_eff = effectiveIonMassDensityWeighted(bulk);
     const double JiBulk = std::max(totalIonCurrentDensity(bulk, Te), 0.0);
     const double IiTotal = JiBulk * bulk.substrateArea;
-    const double vScale = bulk.useBias ? bulk.biasVoltageGuess : bulk.residualVoltageRipple;
+    constexpr double referenceBiasPower = 200.0;
+    const double biasPowerScale = std::sqrt(
+        std::max(bulk.biasPower, 0.0) / referenceBiasPower);
+    const double vScale = bulk.useBias
+        ? std::abs(bulk.biasVoltageGuess) * biasPowerScale
+        : bulk.residualVoltageRipple;
     const double electronSatCurrent =
         E_CHARGE * electronThermalSpeed(Te) * ne * bulk.substrateArea / 4.0;
     const double floatingVoltage = Te * std::log(

@@ -36,6 +36,8 @@ struct ParticleTypeData
     bool custom = false;
 
     int interval = 10;
+    int releaseDuration = 3000;
+    int depositVoxelType = 3;
 
     std::string name;
     EnergyDistribution iedf;
@@ -70,6 +72,7 @@ struct Particle {
     float dx = 0, dy = 0, dz = 0;
 
     int deposit = 0;
+    int depositVoxelType = 3;
     float speed = 0;
     float energy = 20;
     int type = 0;
@@ -79,6 +82,7 @@ struct HitEvent {
     int cx, cy, cz;
     float damage;
     uint32_t flags; // 1 = deposit, 2 = absorbed
+    int depositVoxelType;
 };
 
 struct EnergyBin

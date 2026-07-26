@@ -37,6 +37,14 @@ add_custom_command(TARGET BoschEtchProcess POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${PROJECT_SOURCE_DIR}/shaders
     $<TARGET_FILE_DIR:BoschEtchProcess>/shaders
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+    $<TARGET_FILE_DIR:BoschEtchProcess>/simulations
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${PROJECT_SOURCE_DIR}/src/simulations/stackSimulation.cpp
+    $<TARGET_FILE_DIR:BoschEtchProcess>/simulations/stackSimulation.cpp
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${PROJECT_SOURCE_DIR}/include/stackSimulations.h
+    $<TARGET_FILE_DIR:BoschEtchProcess>/simulations/stackSimulations.h
 )
 
 target_include_directories(BoschEtchProcess PRIVATE
@@ -60,4 +68,5 @@ target_link_libraries(
     BoschEtchProcess
     PRIVATE
     implot::implot
+    windowscodecs
 )

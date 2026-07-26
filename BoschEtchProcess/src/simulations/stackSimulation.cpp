@@ -1,15 +1,26 @@
 
 #include "stackSimulations.h"
 
-const std::vector<VoxelMaterialInfo>& stackSimulationMaterials()
+std::vector<VoxelMaterialInfo>& stackSimulationMaterials()
 {
-    static const std::vector<VoxelMaterialInfo> materials = {
-        {0, "SiO2", 255, 105, 0},
-        {1, "Si3N4", 0, 255, 0},
-        {2, "Si", 128, 0, 128},
-        {3, "DX", 0, 255, 255}
+    static std::vector<VoxelMaterialInfo> materials = {
+        {0, "SiO2", 255, 105, 0, 1000.0f, 70.0f, 1},
+        {1, "Si3N4", 0, 255, 0, 40.0f, 70.0f, 1},
+        {2, "Si", 128, 0, 128, 50.0f, 70.0f, 1},
+        {3, "DX", 0, 255, 255, 10000.0f, 10000.0f, 1}
     };
     return materials;
+}
+
+static Voxel voxelFromMaterial(const VoxelMaterialInfo& material)
+{
+    Voxel voxel;
+    voxel.solid = material.solid;
+    voxel.threshold = material.threshold;
+    voxel.depositThreshold = material.depositThreshold;
+    voxel.voxelSize = Settings::voxelSize;
+    voxel.type = material.type;
+    return voxel;
 }
 
 Simulation stackSimulation() {
@@ -20,33 +31,10 @@ Simulation stackSimulation() {
         Settings::voxelSize
     );
 
-    Voxel SiO2;
-
-    SiO2.solid = 1;
-    SiO2.threshold = 1000;
-    SiO2.depositThreshold = 70;
-    SiO2.type = 0;
-
-    Voxel Si3N4;
-
-    Si3N4.solid = 1;
-    Si3N4.threshold = 40;
-    Si3N4.depositThreshold = 70;
-    Si3N4.type = 1;
-
-    Voxel Si;
-
-    Si.solid = 1;
-    Si.threshold = 50;
-    Si.depositThreshold = 70;
-    Si.type = 2;
-
-    Voxel DX;
-
-    DX.solid = 1;
-    DX.threshold = 60;
-    DX.depositThreshold = 100;
-    DX.type = 3;
+    std::vector<VoxelMaterialInfo>& materials = stackSimulationMaterials();
+    Voxel SiO2 = voxelFromMaterial(materials[0]);
+    Voxel Si3N4 = voxelFromMaterial(materials[1]);
+    Voxel Si = voxelFromMaterial(materials[2]);
 
 
     // Bottom oxide

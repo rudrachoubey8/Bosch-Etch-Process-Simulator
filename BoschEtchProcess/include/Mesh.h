@@ -13,7 +13,7 @@ public:
     ~Mesh();
 
     void initGPU();     // create buffers, shaders, VAO
-    void buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int sliceIndex);   // dispatch compute
+    void buildMesh(float rayOrigin[3], float viewMatrix[9], int sliceDir, int sliceIndex, bool showSlice);   // dispatch compute
     void draw();        // render
     void setRenderingProgram(GLuint program);
     void setVoxelBuffer(GLuint ssbo);
