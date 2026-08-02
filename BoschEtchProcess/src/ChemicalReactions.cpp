@@ -158,6 +158,231 @@ namespace
         return (IiTotal - Ie - Irf) / Cs;
     }
 
+    std::vector<double> sheathChildLangmuirThickness(
+        const std::vector<double>& Vs,
+        double ne,
+        double Te,
+        double M_eff,
+        const BulkModel& bulk)
+    {
+        std::vector<double> ds(Vs.size(), 1e-6);
+        const double uB = bohmSpeed(Te, M_eff);
+        const double Ji = std::max(E_CHARGE * ne * uB, 1e-30);
+        const double factor = (4.0 * EPS0 / 9.0) *
+            std::sqrt(E_CHARGE / (2.0 * std::max(M_eff, 1e-31)));
+
+        for (std::size_t i = 0; i < Vs.size(); ++i)
+        {
+            const double phiE = clampValue(
+                Vs[i] / std::max(Te, 0.05),
+                -45.0,
+                45.0);
+            const double VsAbs = std::max(std::abs(phiE * Te), 1.0);
+            ds[i] = clampValue(
+                std::sqrt(factor * std::pow(VsAbs, 1.5) / Ji),
+                1e-6,
+                5e-3);
+        }
+
+        return ds;
+    }
+
+    std::vector<double> solveSheathCircuitOnePeriod(
+        const std::vector<double>& t,
+        const std::vector<double>& ds,
+        double y0,
+        double Te,
+        double ne,
+        double IiTotal,
+        double Imax,
+        const BulkModel& bulk)
+    {
+        std::vector<double> y(t.size(), y0);
+        if (t.size() < 2)
+            return y;
+
+        const double outputStep = t[1] - t[0];
+        const int substeps = std::max(
+            1,
+            static_cast<int>(std::ceil(outputStep / 1e-11)));
+        const double h = outputStep / substeps;
+
+        for (std::size_t i = 1; i < t.size(); ++i)
+        {
+            double tau = t[i - 1];
+            double v = y[i - 1];
+
+            for (int substep = 0; substep < substeps; ++substep)
+            {
+                const double k1 = sheathCircuitRhs(tau, v, t, ds, Te, ne, IiTotal, Imax, bulk);
+                const double k2 = sheathCircuitRhs(tau + 0.5 * h, v + 0.5 * h * k1, t, ds, Te, ne, IiTotal, Imax, bulk);
+                const double k3 = sheathCircuitRhs(tau + 0.5 * h, v + 0.5 * h * k2, t, ds, Te, ne, IiTotal, Imax, bulk);
+                const double k4 = sheathCircuitRhs(tau + h, v + h * k3, t, ds, Te, ne, IiTotal, Imax, bulk);
+
+                v += (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+                tau += h;
+
+                if (!std::isfinite(v))
+                {
+                    v = y[i - 1];
+                    break;
+                }
+            }
+
+            y[i] = v;
+
+            if (!std::isfinite(y[i]))
+            {
+                y[i] = y[i - 1];
+                break;
+            }
+        }
+
+        return y;
+    }
+
+    struct BulkRates
+    {
+        std::unordered_map<std::string, double> dnDt;
+        double dTeDt = 0.0;
+    };
+
+    BulkRates computeBulkRates(
+        const BulkModel& bulk,
+        const std::unordered_map<std::string, double>& densities,
+        double Te)
+    {
+        BulkModel state = bulk;
+        state.densities = densities;
+        state.Te0 = std::max(Te, 0.05);
+
+        BulkRates rates;
+        for (const auto& p : Species)
+        {
+            rates.dnDt[p.first] = 0.0;
+            (void)state.densities[p.first];
+        }
+
+        double Pinel = 0.0;
+        for (const Reaction& rxn : state.reactions)
+        {
+            const double k = rxn.a *
+                std::pow(state.Te0, rxn.b) *
+                std::exp(-rxn.c / state.Te0);
+
+            double R = k;
+            for (const auto& p : rxn.reactants)
+                R *= std::pow(speciesDensityForRate(state, p.first), p.second);
+
+            if (!std::isfinite(R))
+                continue;
+
+            bool electronRxn = false;
+            for (const auto& p : rxn.reactants)
+            {
+                if (p.first == "e-")
+                    electronRxn = true;
+                rates.dnDt[p.first] -= R * p.second;
+            }
+
+            if (electronRxn)
+                Pinel += R * rxn.energy;
+
+            for (const auto& p : rxn.products)
+                rates.dnDt[p.first] += R * p.second;
+        }
+
+        for (const auto& flow : state.motherNeutralFlowSccm)
+            rates.dnDt[flow.first] +=
+                flow.second * SCCM_TO_PARTICLES_PER_SECOND /
+                std::max(state.Volume, 1e-30);
+
+        for (const auto& p : Species)
+        {
+            rates.dnDt[p.first] += state.inPump[p.first];
+
+            if (isPumpedSpecies(p.first))
+                rates.dnDt[p.first] -=
+                    state.pump * speciesDensityForRate(state, p.first);
+
+            if (p.second.charge > 0)
+            {
+                const double mass = p.second.mass * AMU;
+                const double uB = bohmSpeed(state.Te0, mass);
+                rates.dnDt[p.first] -=
+                    std::max(getDensity(state, p.first), 0.0) *
+                    uB * state.Area / std::max(state.Volume, 1e-30);
+            }
+        }
+
+        const double mRefIon = 50.0 * AMU;
+        const double ne = std::max(getDensity(state, "e-"), 1.0);
+        const double uBe = bohmSpeed(state.Te0, mRefIon);
+        rates.dnDt["e-"] -=
+            ne * uBe * state.Area / std::max(state.Volume, 1e-30);
+
+        double gammaI = 0.0;
+        for (const auto& p : Species)
+        {
+            if (p.second.charge > 0)
+            {
+                const double mass = p.second.mass * AMU;
+                gammaI += std::max(getDensity(state, p.first), 0.0) *
+                    bohmSpeed(state.Te0, mass);
+            }
+        }
+
+        const double VsCoeff = std::log(
+            std::sqrt(std::max(mRefIon / (2.0 * PI * E_MASS), 1.0)));
+        const double VsEv = state.Te0 * VsCoeff;
+        const double Qsheath =
+            gammaI * (state.Area / std::max(state.Volume, 1e-30)) *
+            (VsEv + 2.5 * state.Te0);
+        const double powerIn =
+            state.Pabs / (std::max(state.Volume, 1e-30) * E_CHARGE);
+        const double neSafe = std::max(ne, 1e10);
+
+        rates.dTeDt =
+            (powerIn - Pinel - Qsheath) / (1.5 * neSafe) -
+            (state.Te0 / neSafe) * rates.dnDt["e-"];
+
+        return rates;
+    }
+
+    std::unordered_map<std::string, double> addScaledDensities(
+        const std::unordered_map<std::string, double>& densities,
+        const std::unordered_map<std::string, double>& dnDt,
+        double scale)
+    {
+        std::unordered_map<std::string, double> out = densities;
+        for (const auto& p : Species)
+        {
+            const auto it = dnDt.find(p.first);
+            const double derivative = it == dnDt.end() ? 0.0 : it->second;
+            out[p.first] += scale * derivative;
+
+            if (p.second.charge == 0)
+                out[p.first] = std::max(out[p.first], 1.0);
+            else
+                out[p.first] = std::max(out[p.first], 0.0);
+        }
+        return out;
+    }
+
+    void applyDensityFloors(BulkModel& bulk)
+    {
+        for (auto& p : bulk.densities)
+        {
+            const auto propIt = Species.find(p.first);
+            const bool neutral =
+                propIt != Species.end() && propIt->second.charge == 0;
+            const double floor = neutral ? 1.0 : 0.0;
+
+            if (!std::isfinite(p.second) || p.second < floor)
+                p.second = floor;
+        }
+    }
+
     std::vector<double> smoothGaussian(const std::vector<double>& values, double sigma)
     {
         if (values.empty() || sigma <= 0.0)
@@ -216,7 +441,7 @@ double electricField(double V, double x, double d)
     return -(1.5 * V / d) * std::sqrt(xi);
 }
 
-void initializeDefaultBulk(BulkModel& bulk, double gasTemp)
+void initializeDefaultBulk(BulkModel& bulk, double gasTemp, double pressureMtorr)
 {
     bulk = BulkModel{};
 
@@ -230,7 +455,7 @@ void initializeDefaultBulk(BulkModel& bulk, double gasTemp)
     bulk.Area = 2.0 * PI * reactorRadius * reactorLength +
         2.0 * PI * reactorRadius * reactorRadius;
     bulk.substrateArea = 0.01;
-    bulk.pressureMtorr = 10.0;
+    bulk.pressureMtorr = std::max(pressureMtorr, 1e-6);
     bulk.gasTemp = gasTemp;
     bulk.Pabs = 700.0 * 0.3;
     bulk.biasPower = 200.0;
@@ -382,101 +607,52 @@ void initializeDefaultBulk(BulkModel& bulk, double gasTemp)
 
 void advanceModel(BulkModel& bulk)
 {
-    std::unordered_map<std::string, double> densitiesRate;
-    for (const auto& p : Species)
-    {
-        densitiesRate[p.first] = 0.0;
-        (void)bulk.densities[p.first];
-    }
+    const double h = std::max(bulk.dt, 0.0);
+    if (h <= 0.0)
+        return;
 
-    double Pinel = 0.0;
-    for (const Reaction& rxn : bulk.reactions)
-    {
-        const double Te = std::max(bulk.Te0, 0.05);
-        const double k = rxn.a * std::pow(Te, rxn.b) * std::exp(-rxn.c / Te);
+    const auto y0 = bulk.densities;
+    const double Te0 = std::max(bulk.Te0, 0.05);
 
-        double R = k;
-        for (const auto& p : rxn.reactants)
-            R *= std::pow(speciesDensityForRate(bulk, p.first), p.second);
+    const BulkRates k1 = computeBulkRates(bulk, y0, Te0);
+    const auto y1 = addScaledDensities(y0, k1.dnDt, 0.5 * h);
+    const BulkRates k2 = computeBulkRates(
+        bulk,
+        y1,
+        Te0 + 0.5 * h * k1.dTeDt);
 
-        if (!std::isfinite(R))
-            continue;
+    const auto y2 = addScaledDensities(y0, k2.dnDt, 0.5 * h);
+    const BulkRates k3 = computeBulkRates(
+        bulk,
+        y2,
+        Te0 + 0.5 * h * k2.dTeDt);
 
-        bool electronRxn = false;
-        for (const auto& p : rxn.reactants)
-        {
-            if (p.first == "e-")
-                electronRxn = true;
-            densitiesRate[p.first] -= R * p.second;
-        }
-
-        if (electronRxn)
-            Pinel += R * rxn.energy;
-
-        for (const auto& p : rxn.products)
-            densitiesRate[p.first] += R * p.second;
-    }
-
-    for (const auto& flow : bulk.motherNeutralFlowSccm)
-        densitiesRate[flow.first] += flow.second * SCCM_TO_PARTICLES_PER_SECOND /
-            std::max(bulk.Volume, 1e-30);
+    const auto y3 = addScaledDensities(y0, k3.dnDt, h);
+    const BulkRates k4 = computeBulkRates(
+        bulk,
+        y3,
+        Te0 + h * k3.dTeDt);
 
     for (const auto& p : Species)
     {
-        densitiesRate[p.first] += bulk.inPump[p.first];
-
-        if (isPumpedSpecies(p.first))
-            densitiesRate[p.first] -= bulk.pump * speciesDensityForRate(bulk, p.first);
-
-        if (p.second.charge > 0)
-        {
-            const double mass = p.second.mass * AMU;
-            const double uB = bohmSpeed(bulk.Te0, mass);
-            densitiesRate[p.first] -= std::max(getDensity(bulk, p.first), 0.0) *
-                uB * bulk.Area / std::max(bulk.Volume, 1e-30);
-        }
+        bulk.densities[p.first] =
+            y0.at(p.first) +
+            (h / 6.0) *
+            (k1.dnDt.at(p.first) +
+                2.0 * k2.dnDt.at(p.first) +
+                2.0 * k3.dnDt.at(p.first) +
+                k4.dnDt.at(p.first));
     }
 
-    const double mRefIon = 50.0 * AMU;
-    const double ne = std::max(getDensity(bulk, "e-"), 1.0);
-    const double uBe = bohmSpeed(bulk.Te0, mRefIon);
-    densitiesRate["e-"] -= ne * uBe * bulk.Area / std::max(bulk.Volume, 1e-30);
+    bulk.Te0 =
+        Te0 +
+        (h / 6.0) *
+        (k1.dTeDt + 2.0 * k2.dTeDt + 2.0 * k3.dTeDt + k4.dTeDt);
 
-    double gammaI = 0.0;
-    for (const auto& p : Species)
-    {
-        if (p.second.charge > 0)
-        {
-            const double mass = p.second.mass * AMU;
-            gammaI += std::max(getDensity(bulk, p.first), 0.0) *
-                bohmSpeed(bulk.Te0, mass);
-        }
-    }
-
-    const double VsCoeff = std::log(std::sqrt(std::max(mRefIon / (2.0 * PI * E_MASS), 1.0)));
-    const double VsEv = bulk.Te0 * VsCoeff;
-    const double Qsheath = gammaI * (bulk.Area / std::max(bulk.Volume, 1e-30)) *
-        (VsEv + 2.5 * bulk.Te0);
-    const double powerIn = bulk.Pabs / (std::max(bulk.Volume, 1e-30) * E_CHARGE);
-    const double neSafe = std::max(ne, 1e10);
-    const double dTeDt =
-        (powerIn - Pinel - Qsheath) / (1.5 * neSafe) -
-        (bulk.Te0 / neSafe) * densitiesRate["e-"];
-
-    bulk.Te0 += dTeDt * bulk.dt;
     if (!std::isfinite(bulk.Te0) || bulk.Te0 < 0.05)
         bulk.Te0 = 0.05;
 
-    for (auto& p : bulk.densities)
-    {
-        p.second += densitiesRate[p.first] * bulk.dt;
-
-        const auto propIt = Species.find(p.first);
-        const bool neutral = propIt != Species.end() && propIt->second.charge == 0;
-        const double floor = neutral ? 1.0 : 0.0;
-        if (!std::isfinite(p.second) || p.second < floor)
-            p.second = floor;
-    }
+    applyDensityFloors(bulk);
 }
 
 void advanceModelForDuration(BulkModel& bulk)
@@ -508,21 +684,13 @@ void initializeSheath(BulkModel& bulk, Sheath& sheath)
     const double M_eff = effectiveIonMassDensityWeighted(bulk);
     const double JiBulk = std::max(totalIonCurrentDensity(bulk, Te), 0.0);
     const double IiTotal = JiBulk * bulk.substrateArea;
-    constexpr double referenceBiasPower = 200.0;
-    const double biasPowerScale = std::sqrt(
-        std::max(bulk.biasPower, 0.0) / referenceBiasPower);
+    const double Imax = bulk.useBias
+        ? 2.0 * std::max(bulk.biasPower, 0.0) /
+            std::max(std::abs(bulk.biasVoltageGuess), 1e-3)
+        : 0.0;
     const double vScale = bulk.useBias
-        ? std::abs(bulk.biasVoltageGuess) * biasPowerScale
-        : bulk.residualVoltageRipple;
-    const double electronSatCurrent =
-        E_CHARGE * electronThermalSpeed(Te) * ne * bulk.substrateArea / 4.0;
-    const double floatingVoltage = Te * std::log(
-        std::max(IiTotal, 1e-30) / std::max(electronSatCurrent, 1e-30));
-    const double meanDrop = std::max(std::abs(floatingVoltage) + std::abs(vScale), 1.0);
-    const double rfRipple = bulk.useBias ? 0.30 * std::abs(vScale) : 0.50 * std::abs(vScale);
-    const double factor = (4.0 * EPS0 / 9.0) *
-        std::sqrt(2.0 * E_CHARGE / M_eff);
-    const double JiForSheath = std::max(JiBulk, 1e-30);
+        ? std::abs(bulk.biasVoltageGuess)
+        : std::abs(bulk.residualVoltageRipple);
 
     sheath.time.resize(points);
     sheath.voltageWaveform.resize(points);
@@ -532,13 +700,37 @@ void initializeSheath(BulkModel& bulk, Sheath& sheath)
     {
         const double t = i * dt;
         const double phase = std::sin(2.0 * PI * bulk.biasFrequency * t);
-        const double VsAbs = std::max(meanDrop + rfRipple * phase, 1.0);
         sheath.time[i] = t;
-        sheath.voltageWaveform[i] = -VsAbs;
-        sheath.thicknessWaveform[i] = clampValue(
-            std::sqrt(factor * std::pow(VsAbs, 1.5) / JiForSheath),
-            1e-6,
-            5e-3);
+        sheath.voltageWaveform[i] = -vScale * (1.0 + 0.3 * phase);
+        sheath.thicknessWaveform[i] = 150e-6 * (1.0 + 0.2 * phase);
+    }
+
+    for (int iter = 0; iter < std::max(bulk.sheathIterations, 0); ++iter)
+    {
+        sheath.thicknessWaveform = sheathChildLangmuirThickness(
+            sheath.voltageWaveform,
+            ne,
+            Te,
+            M_eff,
+            bulk);
+
+        std::vector<double> solvedVoltage = solveSheathCircuitOnePeriod(
+            sheath.time,
+            sheath.thicknessWaveform,
+            sheath.voltageWaveform.front(),
+            Te,
+            ne,
+            IiTotal,
+            Imax,
+            bulk);
+
+        for (std::size_t i = 0; i < sheath.voltageWaveform.size(); ++i)
+        {
+            const std::size_t prev =
+                i == 0 ? sheath.voltageWaveform.size() - 1 : i - 1;
+            sheath.voltageWaveform[i] =
+                0.5 * (solvedVoltage[i] + solvedVoltage[prev]);
+        }
     }
 
     sheath.voltage = static_cast<float>(

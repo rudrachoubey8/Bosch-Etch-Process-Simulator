@@ -428,6 +428,163 @@ namespace
         }
     }
 
+    struct IedfSweepCurve
+    {
+        std::string label;
+        EnergyDistribution distribution;
+    };
+
+    const ParticleTypeData* findParticleByName(
+        const std::vector<ParticleTypeData>& particles,
+        const std::string& name)
+    {
+        const auto it = std::find_if(
+            particles.begin(),
+            particles.end(),
+            [&](const ParticleTypeData& particle)
+            {
+                return particle.name == name;
+            });
+
+        return it == particles.end() ? nullptr : &(*it);
+    }
+
+    std::vector<ParticleTypeData> runPlasmaCase(
+        const BulkModel& controls,
+        double absorbedPower,
+        double biasPower)
+    {
+        BulkModel trial;
+        initializeDefaultBulk(
+            trial,
+            controls.gasTemp,
+            controls.pressureMtorr);
+
+        trial.dt = controls.dt;
+        trial.duration = controls.duration;
+        trial.Pabs = absorbedPower;
+        trial.pump = controls.pump;
+        trial.biasPower = biasPower;
+        trial.biasFrequency = controls.biasFrequency;
+        trial.biasVoltageGuess = controls.biasVoltageGuess;
+        trial.residualVoltageRipple = controls.residualVoltageRipple;
+        trial.sheathPoints = controls.sheathPoints;
+        trial.sheathIterations = controls.sheathIterations;
+        trial.ionCount = controls.ionCount;
+        trial.ionDt = controls.ionDt;
+        trial.maxCycles = controls.maxCycles;
+        trial.enableMomentumTransfer = controls.enableMomentumTransfer;
+        trial.enableChargeExchange = controls.enableChargeExchange;
+        trial.momentumTransferScale = controls.momentumTransferScale;
+        trial.chargeExchangeScale = controls.chargeExchangeScale;
+        trial.useBias = controls.useBias;
+
+        advanceModelForDuration(trial);
+
+        Sheath trialSheath;
+        initializeSheath(trial, trialSheath);
+        return generateParticles(trial, trialSheath);
+    }
+
+    void buildIedfSweep(
+        const BulkModel& controls,
+        const std::string& speciesName,
+        const std::vector<double>& values,
+        bool varyBias,
+        std::vector<IedfSweepCurve>& curves)
+    {
+        curves.clear();
+        for (double value : values)
+        {
+            std::vector<ParticleTypeData> particles = runPlasmaCase(
+                controls,
+                varyBias ? controls.Pabs : value,
+                varyBias ? value : controls.biasPower);
+
+            const ParticleTypeData* particle = findParticleByName(
+                particles,
+                speciesName);
+
+            if (!particle || particle->iedf.energyCenters.empty())
+                continue;
+
+            IedfSweepCurve curve;
+            curve.label =
+                std::to_string(static_cast<int>(std::round(value))) +
+                (varyBias ? " W bias" : " W power");
+            curve.distribution = particle->iedf;
+            curves.push_back(std::move(curve));
+        }
+    }
+
+    void plotIedfCurves(
+        const char* title,
+        const std::vector<IedfSweepCurve>& curves)
+    {
+        if (curves.empty())
+            return;
+
+        if (!ImPlot::BeginPlot(title))
+            return;
+
+        double xMax = 1.0;
+        double yMax = 1e-30;
+        double yMin = 1e30;
+        for (const IedfSweepCurve& curve : curves)
+        {
+            if (!curve.distribution.energyCenters.empty())
+                xMax = std::max<double>(
+                    xMax,
+                    curve.distribution.energyCenters.back());
+
+            for (float value : curve.distribution.pdf)
+            {
+                if (std::isfinite(value))
+                {
+                    yMax = std::max<double>(yMax, value);
+                    if (value > 0.0f)
+                        yMin = std::min<double>(yMin, value);
+                }
+            }
+        }
+        if (!std::isfinite(yMin) || yMin >= yMax)
+            yMin = yMax * 1e-6;
+
+        ImPlot::SetupAxes(
+            "Energy (eV)",
+            "Ion Flux (mol m^{-2} s^{-1} eV^{-1})");
+        ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
+        ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, xMax, ImGuiCond_Once);
+        ImPlot::SetupAxisLimits(ImAxis_Y1, yMin, yMax * 1.10, ImGuiCond_Once);
+
+        for (const IedfSweepCurve& curve : curves)
+        {
+            const int count = static_cast<int>(
+                std::min(
+                    curve.distribution.energyCenters.size(),
+                    curve.distribution.pdf.size()));
+            if (count <= 0)
+                continue;
+
+            std::vector<float> displayPdf(
+                curve.distribution.pdf.begin(),
+                curve.distribution.pdf.begin() + count);
+            for (float& value : displayPdf)
+            {
+                if (!std::isfinite(value) || value <= 0.0f)
+                    value = static_cast<float>(yMin);
+            }
+
+            ImPlot::PlotLine(
+                curve.label.c_str(),
+                curve.distribution.energyCenters.data(),
+                displayPdf.data(),
+                count);
+        }
+
+        ImPlot::EndPlot();
+    }
+
     uint32_t rgbaPixel(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
     {
         return
@@ -887,6 +1044,8 @@ void renderMesh(Simulation& simulation) {
     int selectedSpraySpecies = 0;
     int selectedTemplateParticle = 0;
     int selectedIEDF = 0;
+    std::vector<IedfSweepCurve> powerSweepCurves;
+    std::vector<IedfSweepCurve> biasSweepCurves;
 
     bool forceMeshBuild = true;
     float lastBuildYaw = yaw;
@@ -988,6 +1147,8 @@ void renderMesh(Simulation& simulation) {
             ImGui::Text("Electron Temp: %.3f eV", bulk.Te0);
             ImGui::Text("Neutral Gas Density: %.3e m^-3", bulk.Ngas);
             ImGui::InputDouble("Absorbed Power (W)", &bulk.Pabs, 1.0, 10.0, "%.3f");
+            ImGui::InputDouble("Pressure (mTorr)", &bulk.pressureMtorr, 0.1, 1.0, "%.3f");
+            bulk.pressureMtorr = std::max(bulk.pressureMtorr, 1e-6);
             ImGui::InputDouble("Temperature (K)", &bulk.gasTemp, 1.0, 1000, "%.3f");
             ImGui::InputDouble("Pump Rate", &bulk.pump, 0.1, 1.0, "%.3f");
             ImGui::InputDouble("Time Step", &bulk.dt, 1e-10, 1e-9, "%.3e");
@@ -1011,11 +1172,15 @@ void renderMesh(Simulation& simulation) {
                 const std::vector<ParticleTypeData> oldParticles = particleDataTypes;
                 const std::vector<float> oldGrid = gridData;
                 const BulkModel controls = bulk;
-                initializeDefaultBulk(bulk, controls.gasTemp);
+                initializeDefaultBulk(
+                    bulk,
+                    controls.gasTemp,
+                    controls.pressureMtorr);
                 bulk.dt = controls.dt;
                 bulk.duration = controls.duration;
                 bulk.Pabs = controls.Pabs;
                 bulk.pump = controls.pump;
+                bulk.pressureMtorr = controls.pressureMtorr;
                 bulk.biasPower = controls.biasPower;
                 bulk.biasFrequency = controls.biasFrequency;
                 bulk.biasVoltageGuess = controls.biasVoltageGuess;
@@ -1216,34 +1381,76 @@ void renderMesh(Simulation& simulation) {
                     const double xMin = 0.0;
                     const double xMax = std::max<double>(x.back() + width, width);
                     double yMax = 0.0;
+                    double yMin = 1e30;
                     for (float value : y)
                     {
                         if (std::isfinite(value))
+                        {
                             yMax = std::max(yMax, static_cast<double>(value));
+                            if (value > 0.0f)
+                                yMin = std::min(yMin, static_cast<double>(value));
+                        }
                     }
                     yMax = std::max(yMax * 1.10, 1e-30);
+                    if (!std::isfinite(yMin) || yMin >= yMax)
+                        yMin = yMax * 1e-6;
 
                     ImPlot::SetupAxes(
                         "Energy (eV)",
                         "Ion Flux (mol m^{-2} s^{-1} eV^{-1})"
                     );
+                    ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
                     ImPlot::SetupAxisLimits(ImAxis_X1, xMin, xMax, ImGuiCond_Once);
-                    ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, yMax, ImGuiCond_Once);
+                    ImPlot::SetupAxisLimits(ImAxis_Y1, yMin, yMax, ImGuiCond_Once);
                     ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, xMin, xMax);
-                    ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, 0.0, yMax);
+                    ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, yMin, yMax);
                     ImPlot::SetupAxisZoomConstraints(ImAxis_X1, width * 0.25, xMax - xMin);
-                    ImPlot::SetupAxisZoomConstraints(ImAxis_Y1, yMax * 1e-6, yMax);
+                    ImPlot::SetupAxisZoomConstraints(ImAxis_Y1, yMin, yMax);
 
-                    ImPlot::PlotBars(
+                    std::vector<float> displayPdf(y.begin(), y.end());
+                    for (float& value : displayPdf)
+                    {
+                        if (!std::isfinite(value) || value <= 0.0f)
+                            value = static_cast<float>(yMin);
+                    }
+
+                    ImPlot::PlotLine(
                         "IEDF",
                         x.data(),
-                        y.data(),
-                        static_cast<int>(x.size()),
-                        width
+                        displayPdf.data(),
+                        static_cast<int>(x.size())
                     );
                 }
 
                 ImPlot::EndPlot();
+            }
+
+            if (!particleDataTypes.empty())
+            {
+                selectedIEDF = std::clamp(
+                    selectedIEDF,
+                    0,
+                    static_cast<int>(particleDataTypes.size()) - 1);
+
+                if (ImGui::Button("Build Power/Bias IEDF Sweeps"))
+                {
+                    const std::string speciesName = particleDataTypes[selectedIEDF].name;
+                    buildIedfSweep(
+                        bulk,
+                        speciesName,
+                        { 2000.0, 3000.0, 4000.0 },
+                        false,
+                        powerSweepCurves);
+                    buildIedfSweep(
+                        bulk,
+                        speciesName,
+                        { 250.0, 350.0, 450.0, 550.0 },
+                        true,
+                        biasSweepCurves);
+                }
+
+                plotIedfCurves("IEDF vs Absorbed Power", powerSweepCurves);
+                plotIedfCurves("IEDF vs Bias Power", biasSweepCurves);
             }
         }
 
@@ -1629,7 +1836,6 @@ void renderMesh(Simulation& simulation) {
         // ========================= GRID FILE WINDOW ========================= //
         else if(currentPage == Page::RenderPage){
             ImGui::Begin("Grid Save/Load");
-            ImGui::SliderInt("Duration", &duration, 0, 50000);
             ImGui::Checkbox("Pause", &pause);
             ImGui::Checkbox("Draw", &draw);
 
