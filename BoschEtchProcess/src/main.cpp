@@ -462,7 +462,7 @@ namespace
 
         trial.dt = controls.dt;
         trial.duration = controls.duration;
-        trial.Pabs = absorbedPower;
+        trial.Pabs = absorbedPower; 
         trial.pump = controls.pump;
         trial.biasPower = biasPower;
         trial.biasFrequency = controls.biasFrequency;
@@ -1157,10 +1157,7 @@ void renderMesh(Simulation& simulation) {
             ImGui::InputDouble("Bias Frequency (Hz)", &bulk.biasFrequency, 1e5, 1e6, "%.3e");
             ImGui::InputDouble("Bias Voltage Guess (V)", &bulk.biasVoltageGuess, 1.0, 10.0, "%.3f");
             ImGui::InputInt("Sheath Points", &bulk.sheathPoints);
-            ImGui::InputInt("Sheath Iterations", &bulk.sheathIterations);
             ImGui::InputInt("Transport Ions", &bulk.ionCount);
-            ImGui::InputDouble("Ion Time Step", &bulk.ionDt, 1e-10, 1e-9, "%.3e");
-            ImGui::InputInt("Max RF Cycles", &bulk.maxCycles);
             ImGui::Checkbox("Momentum Transfer", &bulk.enableMomentumTransfer);
             ImGui::Checkbox("Charge Exchange", &bulk.enableChargeExchange);
             ImGui::InputDouble("MT Scale", &bulk.momentumTransferScale, 0.1, 1.0, "%.3f");

@@ -459,11 +459,11 @@ void initializeDefaultBulk(BulkModel& bulk, double gasTemp, double pressureMtorr
     bulk.gasTemp = gasTemp;
     bulk.Pabs = 700.0 * 0.3;
     bulk.biasPower = 200.0;
-    bulk.biasFrequency = 2.0e6;
-    bulk.biasVoltageGuess = 100.0;
+    bulk.biasFrequency = 13.56e6;
+    bulk.biasVoltageGuess = 50;
     bulk.residualVoltageRipple = 20.0;
     bulk.sheathPoints = 240;
-    bulk.sheathIterations = 20;
+    bulk.sheathIterations = 300;
     bulk.ionCount = 5000;
     bulk.ionDt = 1e-9;
     bulk.maxCycles = 20;
@@ -801,12 +801,11 @@ TransportResult transportSpecies(
             const double Eion = 0.5 * mass * v * v / E_CHARGE;
             const double vth = gasThermalSpeed(mass, bulk.gasTemp);
             const double vrel = std::max(std::abs(v), vth);
-
             const double sigMt = bulk.enableMomentumTransfer
                 ? bulk.momentumTransferScale * sigmaMT(Eion)
                 : 0.0;
             const double nuM = Ngas * sigMt * vrel;
-              
+            
             v += (aE - nuM * v) * dt;
             v = std::max(v, 0.0);
             x -= v * dt;
