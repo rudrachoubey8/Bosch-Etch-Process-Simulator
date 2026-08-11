@@ -337,9 +337,25 @@ void Simulation::uploadParticles(
         p.iedf.pdf = { 1.0f };
     }
 
+    double totalWeight = 0.0;
+    std::vector<double> weights(p.iedf.pdf.size(), 0.0);
     for (int i = 0; i < p.iedf.pdf.size(); i++)
     {
-        cumulative += p.iedf.pdf[i];
+        weights[i] = std::max(static_cast<double>(p.iedf.pdf[i]), 0.0);
+        totalWeight += weights[i];
+    }
+
+    if (totalWeight <= 0.0 || !std::isfinite(totalWeight))
+    {
+        p.iedf.energyCenters = { std::max(p.energy, 0.01f) };
+        p.iedf.pdf = { 1.0f };
+        weights.assign(1, 1.0);
+        totalWeight = 1.0;
+    }
+
+    for (int i = 0; i < p.iedf.pdf.size(); i++)
+    {
+        cumulative += static_cast<float>(weights[i] / totalWeight);
 
         bins.push_back(
             {

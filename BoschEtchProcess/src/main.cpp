@@ -1422,33 +1422,6 @@ void renderMesh(Simulation& simulation) {
                 ImPlot::EndPlot();
             }
 
-            if (!particleDataTypes.empty())
-            {
-                selectedIEDF = std::clamp(
-                    selectedIEDF,
-                    0,
-                    static_cast<int>(particleDataTypes.size()) - 1);
-
-                if (ImGui::Button("Build Power/Bias IEDF Sweeps"))
-                {
-                    const std::string speciesName = particleDataTypes[selectedIEDF].name;
-                    buildIedfSweep(
-                        bulk,
-                        speciesName,
-                        { 2000.0, 3000.0, 4000.0 },
-                        false,
-                        powerSweepCurves);
-                    buildIedfSweep(
-                        bulk,
-                        speciesName,
-                        { 250.0, 350.0, 450.0, 550.0 },
-                        true,
-                        biasSweepCurves);
-                }
-
-                plotIedfCurves("IEDF vs Absorbed Power", powerSweepCurves);
-                plotIedfCurves("IEDF vs Bias Power", biasSweepCurves);
-            }
         }
 
 
@@ -1556,7 +1529,7 @@ void renderMesh(Simulation& simulation) {
                 ImGui::TableSetupColumn("Release Interval");
                 ImGui::TableSetupColumn("Release Duration");
                 ImGui::TableSetupColumn("Count");
-                ImGui::TableSetupColumn("Energy");
+                ImGui::TableSetupColumn("Mean Energy");
                 ImGui::TableSetupColumn("Angle");
                 ImGui::TableSetupColumn("Deposit");
                 ImGui::TableSetupColumn("Deposit Voxel");

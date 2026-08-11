@@ -101,8 +101,6 @@ void main()
             p.dz
         ));
 
-    float energy = p.energy;
-
     ivec3 cell =
         ivec3(floor(origin / voxelSize));
 
@@ -289,7 +287,7 @@ void main()
                 continue;
             }
 
-            float damage = energy;
+            float damage = p.energy;
 
             uint writeIdx =
                 atomicAdd(hitCount, 1u);

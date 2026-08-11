@@ -48,6 +48,39 @@ namespace
         return it == bulk.densities.end() ? 0.0 : it->second;
     }
 
+    double weightedMeanEnergy(const EnergyDistribution& dist)
+    {
+        const size_t n = std::min(dist.energyCenters.size(), dist.pdf.size());
+        if (n == 0)
+            return 0.0;
+
+        double weightedEnergy = 0.0;
+        double totalWeight = 0.0;
+        for (size_t i = 0; i < n; ++i)
+        {
+            const double density = std::max(static_cast<double>(dist.pdf[i]), 0.0);
+            if (density <= 0.0 || !std::isfinite(density))
+                continue;
+
+            double binWidth = 1.0;
+            if (n > 1)
+            {
+                if (i == 0)
+                    binWidth = static_cast<double>(dist.energyCenters[1] - dist.energyCenters[0]);
+                else if (i + 1 == n)
+                    binWidth = static_cast<double>(dist.energyCenters[i] - dist.energyCenters[i - 1]);
+                else
+                    binWidth = 0.5 * static_cast<double>(dist.energyCenters[i + 1] - dist.energyCenters[i - 1]);
+            }
+
+            const double weight = density * std::max(binWidth, 0.0);
+            weightedEnergy += static_cast<double>(dist.energyCenters[i]) * weight;
+            totalWeight += weight;
+        }
+
+        return totalWeight > 0.0 ? weightedEnergy / totalWeight : 0.0;
+    }
+
     double speciesDensityForRate(const BulkModel& bulk, const std::string& name)
     {
         const auto propIt = Species.find(name);
@@ -880,11 +913,9 @@ std::vector<ParticleTypeData> generateParticles(BulkModel& bulk, Sheath& sheath)
         p.interval = 10;
 
         buildIEDF(tr, p.iedf, 200);
-        if (!p.iedf.energyCenters.empty())
-            p.energy = p.iedf.energyCenters[
-                std::distance(
-                    p.iedf.pdf.begin(),
-                    std::max_element(p.iedf.pdf.begin(), p.iedf.pdf.end()))];
+        const double meanEnergy = weightedMeanEnergy(p.iedf);
+        if (meanEnergy > 0.0)
+            p.energy = static_cast<float>(meanEnergy);
 
         particles.push_back(std::move(p));
     }
