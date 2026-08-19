@@ -522,6 +522,7 @@ void initializeDefaultBulk(BulkModel& bulk, double gasTemp, double pressureMtorr
     bulk.densities["CF2+"] = 2.0e18;
     bulk.densities["Ar+"] = 2.0e18;
     bulk.densities["e-"] = 2.0e18;
+
     bulk.Ngas = totalGasDensity;
 
     const double ndotTotal = totalFlowSccm * SCCM_TO_PARTICLES_PER_SECOND;

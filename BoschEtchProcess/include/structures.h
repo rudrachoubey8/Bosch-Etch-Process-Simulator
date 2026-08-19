@@ -83,6 +83,8 @@ struct HitEvent {
     float damage;
     uint32_t flags; // 1 = deposit, 2 = absorbed
     int depositVoxelType;
+    int nx, ny, nz;
+    float incidenceCos;
 };
 
 struct EnergyBin

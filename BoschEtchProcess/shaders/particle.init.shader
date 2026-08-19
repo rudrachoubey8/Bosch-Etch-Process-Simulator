@@ -56,6 +56,7 @@ uniform int type;
 
 uniform float cosTheta;
 uniform float X;
+uniform float spawnY;
 uniform float Z;
 uniform float seed;
 
@@ -168,7 +169,7 @@ void main()
     particles[index].x =
         rand01(id * 3u + uint(seed)) * X;
 
-    particles[index].y = 290.0;
+    particles[index].y = spawnY;
 
     particles[index].z =
         rand01(id * 4u + uint(seed)) * Z;

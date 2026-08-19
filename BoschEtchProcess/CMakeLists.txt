@@ -9,6 +9,7 @@ find_package(imgui CONFIG REQUIRED)
 
 add_executable(BoschEtchProcess
     src/main.cpp
+    src/RenderWindow.cpp
     src/Mesh.cpp
     src/simulation.cpp
     src/structures.cpp
@@ -16,6 +17,7 @@ add_executable(BoschEtchProcess
     src/shader.cpp
     src/Measurments.cpp
     src/ChemicalReactions.cpp
+    src/AppSupport.cpp
 
     imgui/backend/imgui_impl_opengl3.cpp
     imgui/backend/imgui_impl_glfw.cpp

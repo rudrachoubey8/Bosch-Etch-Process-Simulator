@@ -41,7 +41,7 @@ Simulation stackSimulation() {
     simulation.initRectangle(
         SiO2,
         0, 0, 0,
-        Settings::X, 20, Settings::X
+        Settings::X, 20, Settings::Z
     );
 
     // Alternating layers
@@ -52,7 +52,7 @@ Simulation stackSimulation() {
             simulation.initRectangle(
                 Si3N4,
                 0, i * 20, 0,
-                Settings::X, (i + 1) * 20, Settings::X
+                Settings::X, (i + 1) * 20, Settings::Z
             );
         }
         else
@@ -60,7 +60,7 @@ Simulation stackSimulation() {
             simulation.initRectangle(
                 Si,
                 0, i * 20, 0,
-                Settings::X, (i + 1) * 20, Settings::X
+                Settings::X, (i + 1) * 20, Settings::Z
             );
         }
     }
@@ -69,7 +69,7 @@ Simulation stackSimulation() {
     simulation.initRectangle(
         SiO2,
         0, 220, 0,
-        Settings::X, 280, Settings::X
+        Settings::X, 280, Settings::Z
     );
 
 
@@ -78,7 +78,7 @@ Simulation stackSimulation() {
     // through the top oxide layer
     // ----------------------------------------------------
 
-    const int radius = 12;
+    const int radius = 100;
 
     const int centerX = Settings::X / 2;
     const int centerZ = Settings::Z / 2;

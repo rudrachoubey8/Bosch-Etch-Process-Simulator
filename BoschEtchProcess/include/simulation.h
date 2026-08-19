@@ -40,6 +40,9 @@ private:
 	uint32_t MAX_HITS = 50000;
 	uint32_t MAX_STEPS = 5000;
 	float MIN_ENERGY = 1e-6f;
+	float SPUTTER_YIELD_SCALE = 0.35f;
+	float SPUTTER_ENERGY_DAMPING = 0.82f;
+	float MIN_SPUTTER_ENERGY = 1.0f;
 	GLuint particleSSBO = 0, hitSSBO = 0, reactionProbabilitiesSSBO = 0, counterSSBO = 0, axesSSBO = 0, rayMarchProgram = 0, finalParticlesCount = 0, finalParticles = 0;
 	size_t reactionProbabilitiesCapacity = 0;
 	GLuint iedfSSBO = 0;

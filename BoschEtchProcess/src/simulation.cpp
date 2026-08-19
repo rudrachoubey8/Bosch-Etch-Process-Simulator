@@ -154,6 +154,28 @@ void Simulation::dispatchRayMarch(GLuint program, int particleCount, const std::
     glDispatchCompute(groups, 1, 1);
 
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    uint32_t survivorCount = 0;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, finalParticlesCount);
+    glGetBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(uint32_t),
+        &survivorCount);
+
+    survivorCount = std::min(survivorCount, MAX_PARTICLES);
+    if (survivorCount > 0)
+    {
+        glBindBuffer(GL_COPY_READ_BUFFER, finalParticles);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, particleSSBO);
+        glCopyBufferSubData(
+            GL_COPY_READ_BUFFER,
+            GL_COPY_WRITE_BUFFER,
+            0,
+            0,
+            sizeof(Particle) * survivorCount);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    }
 }
 
 
@@ -190,7 +212,7 @@ void Simulation::downloadVoxels() {
     glGetBufferSubData(
         GL_SHADER_STORAGE_BUFFER,
         0,
-        Settings::X * Settings::Y * Settings::Z * sizeof(Voxel),
+        grid.voxels.size() * sizeof(Voxel),
         grid.voxels.data()
     );
 
@@ -435,13 +457,19 @@ void Simulation::uploadParticles(
         glGetUniformLocation(
             initParticlesProgram,
             "X"),
-        Settings::X);
+        static_cast<float>(grid.X));
+
+    glUniform1f(
+        glGetUniformLocation(
+            initParticlesProgram,
+            "spawnY"),
+        static_cast<float>(grid.Y - 10));
 
     glUniform1f(
         glGetUniformLocation(
             initParticlesProgram,
             "Z"),
-        Settings::Z);
+        static_cast<float>(grid.Z));
 
     glUniform1f(
         glGetUniformLocation(
@@ -469,6 +497,7 @@ void Simulation::uploadParticles(
 
     glMemoryBarrier(
         GL_SHADER_STORAGE_BARRIER_BIT);
+
 }
 
 void Simulation::uploadVoxels(std::vector<Voxel>& voxels) {
@@ -483,9 +512,9 @@ void Simulation::uploadVoxels(std::vector<Voxel>& voxels) {
 
 void Simulation::reset() {
 
-    for (int x = 0; x < Settings::X; x++) {
-        for (int y = 0; y < Settings::Y; y++) {
-            for (int z = 0; z < Settings::Z; z++) {
+    for (int x = 0; x < grid.X; x++) {
+        for (int y = 0; y < grid.Y; y++) {
+            for (int z = 0; z < grid.Z; z++) {
 
                 Voxel& v = grid.at(x, y, z);
 
@@ -527,7 +556,11 @@ void Simulation::dispatchHits(GLuint program) {
     glUniform1i(glGetUniformLocation(program, "voxelTypeCount"), voxelTypeCount);
     glUniform1fv(glGetUniformLocation(program, "voxelThresholds"), 16, voxelThresholds.data());
     glUniform1fv(glGetUniformLocation(program, "voxelDepositThresholds"), 16, voxelDepositThresholds.data());
+    glUniform1f(glGetUniformLocation(program, "sputterYieldScale"), SPUTTER_YIELD_SCALE);
+    glUniform1f(glGetUniformLocation(program, "sputterEnergyDamping"), SPUTTER_ENERGY_DAMPING);
+    glUniform1f(glGetUniformLocation(program, "minSputterEnergy"), MIN_SPUTTER_ENERGY);
 
+    hitCount = std::min(hitCount, MAX_HITS);
     int groups = (hitCount + 255) / 256;
 
     glDispatchCompute(groups, 1, 1);
