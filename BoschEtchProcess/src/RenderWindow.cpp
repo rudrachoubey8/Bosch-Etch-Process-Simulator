@@ -274,9 +274,17 @@ void renderMesh(Simulation& simulation) {
     ImPlot::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
 
+    io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", 24.0f);
 
     ImGui::StyleColorsLight();
     ImPlot::StyleColorsLight();
+
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    style.FramePadding = ImVec2(4, 2);
+    style.ItemSpacing = ImVec2(6, 4);
+    style.WindowPadding = ImVec2(8, 8);
+    style.ScrollbarSize = 14.0f;
 
     // Backend init
     ImGui_ImplGlfw_InitForOpenGL(window, true);

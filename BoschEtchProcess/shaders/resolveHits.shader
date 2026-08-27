@@ -3,10 +3,15 @@
 layout(local_size_x = 256) in;
 
 #define MAX_HITS 50000u
-#define MAX_SPUTTER_LAYERS 16
 
-#define MAX_SPUTTER_NEIGHBORS 8
-#define MAX_SPUTTER_PATCH_VOXELS (MAX_SPUTTER_NEIGHBORS + 1)
+/*
+ * Safety bounds only, not physical parameters. The real layer count and
+ * patch size are derived below from the actual energy decay and yield of
+ * each impact, so etch depth keeps scaling with ion energy instead of
+ * saturating at a small fixed constant.
+ */
+#define MAX_SPUTTER_LAYERS_HARD 512
+#define MAX_PATCH_RADIUS 12
 
 struct Voxel
 {
@@ -127,25 +132,13 @@ float sputterYield(float energy, float eth, float incidenceCos)
         yamamuraAngularFactor(incidenceCos);
 }
 
-ivec3 tangentOffset(ivec3 normal, int index)
+ivec3 tangentOffset(ivec3 normal, int a, int b)
 {
-    int a = index / 3 - 1;
-    int b = index % 3 - 1;
-
     if(abs(normal.x) > 0)
         return ivec3(0, a, b);
     if(abs(normal.y) > 0)
         return ivec3(a, 0, b);
     return ivec3(a, b, 0);
-}
-
-int orderedPatchIndex(int order, uint seed)
-{
-    if(order == 0)
-        return 4;
-
-    int ringIndex = (order - 1 + int(seed % 8u)) % 8;
-    return ringIndex < 4 ? ringIndex : ringIndex + 1;
 }
 
 bool removeSurfaceVoxel(ivec3 c)
@@ -174,11 +167,10 @@ int removeUnsupportedNear(ivec3 center, ivec3 normal, int maxRemovals)
     ivec3 down = ivec3(0, -1, 0);
     int removed = 0;
 
-    int patchVoxels = min(MAX_SPUTTER_PATCH_VOXELS, 9);
-
-    for(int order = 0; order < patchVoxels && removed < maxRemovals; ++order)
+    for(int a = -1; a <= 1 && removed < maxRemovals; ++a)
+    for(int b = -1; b <= 1 && removed < maxRemovals; ++b)
     {
-        ivec3 c = center + tangentOffset(normal, order);
+        ivec3 c = center + tangentOffset(normal, a, b);
         if(!inBounds(c))
             continue;
 
@@ -235,6 +227,54 @@ bool trySputterCandidate(
     return removeSurfaceVoxel(candidate);
 }
 
+/*
+ * Remove up to `target` solid voxels from the tangential patch around
+ * `center`, searching outward ring by ring (Chebyshev distance) so that
+ * nearby voxels are always exhausted before farther ones. Unlike a fixed
+ * 3x3 neighborhood, the patch grows with `radius`, so a high-yield impact
+ * always has enough candidates instead of being clamped to a handful of
+ * voxels.
+ */
+int sputterPatch(
+    ivec3 center,
+    ivec3 normal,
+    float energy,
+    float incidenceCos,
+    int target,
+    int radius,
+    uint seed)
+{
+    int removed = 0;
+
+    if(trySputterCandidate(center, energy, incidenceCos))
+        ++removed;
+
+    for(int ring = 1; ring <= radius && removed < target; ++ring)
+    {
+        // Rotate the starting corner per-ring/seed so removal isn't
+        // consistently biased toward one side of the patch.
+        int rot = int(random01(seed ^ uint(ring * 15485863)) * 4.0);
+
+        for(int a = -ring; a <= ring && removed < target; ++a)
+        for(int b = -ring; b <= ring && removed < target; ++b)
+        {
+            if(max(abs(a), abs(b)) != ring)
+                continue;
+
+            int ra = a, rb = b;
+            if(rot == 1) { ra = -b; rb = a; }
+            else if(rot == 2) { ra = -a; rb = -b; }
+            else if(rot == 3) { ra = b; rb = -a; }
+
+            ivec3 candidate = center + tangentOffset(normal, ra, rb);
+            if(trySputterCandidate(candidate, energy, incidenceCos))
+                ++removed;
+        }
+    }
+
+    return removed;
+}
+
 void sputterSurfacePatch(
     ivec3 start,
     ivec3 normal,
@@ -251,7 +291,23 @@ void sputterSurfacePatch(
 
     float damping = clamp(sputterEnergyDamping, 0.0, 1.0);
 
-    for(int layer = 0; layer < MAX_SPUTTER_LAYERS; ++layer)
+    /*
+     * How many layers can the damped energy possibly still be above the
+     * global sputtering floor? This is an exact bound (not a heuristic
+     * guess) derived from the exponential decay itself, so a hotter ion
+     * legitimately reaches deeper instead of being cut off at an
+     * arbitrary fixed layer count. MAX_SPUTTER_LAYERS_HARD only exists
+     * to keep the GPU loop finite in degenerate cases (e.g. damping -> 1).
+     */
+    int layerBound = MAX_SPUTTER_LAYERS_HARD;
+    if(damping > 0.0 && damping < 1.0 &&
+       minSputterEnergy > 0.0 && initialEnergy > minSputterEnergy)
+    {
+        float layersF = log(minSputterEnergy / initialEnergy) / log(damping);
+        layerBound = min(layerBound, int(ceil(layersF)) + 1);
+    }
+
+    for(int layer = 0; layer < layerBound; ++layer)
     {
         float layerEnergy = initialEnergy * pow(damping, float(layer));
         if(layerEnergy < minSputterEnergy)
@@ -272,32 +328,37 @@ void sputterSurfacePatch(
         if(y <= 0.0)
             break;
 
-        int guaranteed = int(floor(y));
+        int target = int(floor(y));
         float fractional = fract(y);
-        int removed = 0;
-        int patchVoxels = min(MAX_SPUTTER_PATCH_VOXELS, 9);
-        int targetRemovals = min(patchVoxels, guaranteed);
         if(fractional > 0.0 &&
            random01(seed ^ uint(layer * 92837111) ^ uint(voxelIndex(layerCenter))) < fractional)
         {
-            targetRemovals = min(patchVoxels, targetRemovals + 1);
+            ++target;
         }
 
-        for(int order = 0; order < patchVoxels && removed < targetRemovals; ++order)
-        {
-            int patchIndex = orderedPatchIndex(order, seed + uint(layer * 17));
-            ivec3 candidate = layerCenter + tangentOffset(normal, patchIndex);
-            if(trySputterCandidate(
-                candidate,
-                layerEnergy,
-                incidenceCos))
-                ++removed;
-        }
+        if(target <= 0)
+            break;
+
+        // Patch radius grows with the yield so the number of candidate
+        // voxels always keeps pace with how many need removing.
+        int radius = clamp(
+            int(ceil(sqrt(float(target)))),
+            1,
+            MAX_PATCH_RADIUS);
+
+        int removed = sputterPatch(
+            layerCenter,
+            normal,
+            layerEnergy,
+            incidenceCos,
+            target,
+            radius,
+            seed + uint(layer * 17));
 
         removed += removeUnsupportedNear(
             layerCenter,
             normal,
-            patchVoxels - removed);
+            max(target - removed, 0));
 
         if(removed == 0)
             break;

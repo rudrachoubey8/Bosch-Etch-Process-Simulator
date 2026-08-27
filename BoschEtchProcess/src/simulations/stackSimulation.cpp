@@ -78,7 +78,7 @@ Simulation stackSimulation() {
     // through the top oxide layer
     // ----------------------------------------------------
 
-    const int radius = 100;
+    const int radius = 24;
 
     const int centerX = Settings::X / 2;
     const int centerZ = Settings::Z / 2;
